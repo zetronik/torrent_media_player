@@ -1,0 +1,62 @@
+<resources>
+    <string name="app_name">Torrent Player</string>
+
+    <!-- Recent torrents -->
+    <string name="paste_from_clipboard">Вставить из буфера</string>
+    <string name="recent_title">Недавние торренты</string>
+    <string name="recent_empty_hint">Скопируйте magnet-ссылку, ссылку на .torrent-файл или хеш торрента и нажмите кнопку</string>
+    <string name="clipboard_empty">Буфер обмена пуст</string>
+    <string name="clipboard_no_torrent">В буфере обмена нет magnet-ссылки, ссылки на .torrent или хеша</string>
+    <string name="recent_item_details">%1$s · сиды %2$d · пиры %3$d · %4$s</string>
+    <string name="recent_refresh">Обновить</string>
+    <string name="recent_refreshing">Обновление…</string>
+    <string name="recent_clear">Очистить</string>
+    <string name="recent_clear_title">Очистить весь список?</string>
+    <string name="recent_refresh_item">Обновить сиды и пиры</string>
+    <string name="recent_delete_item">Удалить из списка</string>
+    <string name="recent_refresh_done">Обновлено: %1$d из %2$d</string>
+    <string name="recent_refresh_failed">Трекеры не ответили</string>
+    <string name="cancel">Отмена</string>
+    <string name="close">Закрыть</string>
+
+    <!-- Torrent -->
+    <string name="torrent_resolving">Загрузка .torrent-файла…</string>
+    <string name="torrent_fetching_metadata">Получение информации о торренте…</string>
+    <string name="torrent_metadata_progress">Пиры: %1$d · DHT-узлы: %2$d</string>
+    <string name="torrent_swarm">Сиды: %1$d · пиры: %2$d</string>
+    <string name="torrent_no_video">В торренте нет видеофайлов</string>
+    <string name="torrent_resume_at">Остановились на %1$s из %2$s</string>
+    <string name="error_invalid_input">Не удалось распознать ссылку на торрент</string>
+    <string name="error_download_failed">Не удалось скачать .torrent-файл</string>
+    <string name="error_invalid_torrent">Файл повреждён или не является торрентом</string>
+    <string name="error_add_failed">Не удалось добавить торрент</string>
+    <string name="error_generic">Ошибка: %1$s</string>
+    <string name="retry">Повторить</string>
+
+    <!-- Player -->
+    <string name="player_play">Воспроизвести</string>
+    <string name="player_pause">Пауза</string>
+    <string name="player_audio">Аудио</string>
+    <string name="player_subtitles">Субтитры</string>
+    <string name="player_subtitles_off">Выключены</string>
+    <string name="player_audio_title">Аудиодорожка</string>
+    <string name="player_subtitles_title">Субтитры</string>
+    <string name="player_buffering_stats">%1$s · сиды %2$d · пиры %3$d</string>
+    <string name="player_error_details">Не удалось воспроизвести видео: %1$s</string>
+    <string name="player_insufficient_space">Недостаточно места на устройстве: свободно %1$s, нужно не меньше %2$s. Освободите место и попробуйте снова.</string>
+    <string name="player_buffer_seconds">буфер %1$d с</string>
+    <string name="player_buffer_target">буфер %1$d из %2$d с</string>
+    <string name="player_resumed_from">Продолжение с %1$s</string>
+    <string name="track_unknown">Дорожка %1$d</string>
+    <string name="track_channels_mono">моно</string>
+    <string name="track_channels_stereo">стерео</string>
+    <string name="track_external">внешние</string>
+
+    <!-- Units -->
+    <string name="unit_bytes">%1$s Б</string>
+    <string name="unit_kb">%1$s КБ</string>
+    <string name="unit_mb">%1$s МБ</string>
+    <string name="unit_gb">%1$s ГБ</string>
+    <string name="unit_tb">%1$s ТБ</string>
+    <string name="unit_speed">%1$s/с</string>
+</resources>

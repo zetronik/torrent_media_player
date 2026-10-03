@@ -1,0 +1,8 @@
+# libtorrent4j is a SWIG binding: native code instantiates and calls back into these classes by name.
+-keep class org.libtorrent4j.swig.** { *; }
+-keep class org.libtorrent4j.** { *; }
+
+# JNI entry points are bound by class and method name.
+-keepclasseswithmembernames class com.zetronik.torrentplayer.** {
+    native <methods>;
+}
