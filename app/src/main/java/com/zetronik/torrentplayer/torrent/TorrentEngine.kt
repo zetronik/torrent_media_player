@@ -170,12 +170,12 @@ class TorrentEngine(context: Context) {
     ) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val torrent = torrents[infoHash] ?: throw TorrentException(TorrentException.Reason.NOT_ACTIVE)
-            torrent.info ?: throw TorrentException(TorrentException.Reason.NOT_ACTIVE)
+            val info = torrent.info ?: throw TorrentException(TorrentException.Reason.NOT_ACTIVE)
             // Plain usable space on purpose: counting other apps' clearable caches (getAllocatableBytes)
             // would make Android wipe them to make room for a temporary stream cache.
             @SuppressLint("UsableSpace")
             val free = dataRoot.usableSpace
-            val budget = StreamBudget.fromFreeSpace(free)
+            val budget = StreamBudget.forStream(info.files().fileSize(fileIndex), free)
                 ?: throw TorrentException(TorrentException.Reason.INSUFFICIENT_SPACE, freeBytes = free)
             Log.i(TAG, "Stream budget: ahead ${budget.aheadBytes shr 20} MB, behind ${budget.behindBytes shr 20} MB")
             val config = StreamConfig(fileIndex, extraFiles, budget)
@@ -215,19 +215,19 @@ class TorrentEngine(context: Context) {
      */
     internal fun restartFrom(expected: ActiveTorrent, position: Long) {
         try {
-            runBlocking(Dispatchers.IO) {
-                mutex.withLock {
-                    if (torrents[expected.infoHash] !== expected) return@withLock
-                    val config = streams[expected.infoHash]
-                    Log.i(TAG, "Restarting ${expected.infoHash} at byte $position")
-                    val fresh = regenerateLocked(expected) ?: return@withLock
-                    if (config != null) applyStream(fresh, config, position, exactStart = true)
-                }
-            }
+            runBlocking(Dispatchers.IO) { restart(expected, position) }
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
             throw InterruptedIOException("Interrupted while restarting the torrent")
         }
+    }
+
+    private suspend fun restart(expected: ActiveTorrent, position: Long) = mutex.withLock {
+        if (torrents[expected.infoHash] !== expected) return@withLock
+        val config = streams[expected.infoHash]
+        Log.i(TAG, "Restarting ${expected.infoHash} at byte $position")
+        val fresh = regenerateLocked(expected) ?: return@withLock
+        if (config != null) applyStream(fresh, config, position, exactStart = true)
     }
 
     /**
@@ -269,6 +269,7 @@ class TorrentEngine(context: Context) {
                     config.diskAheadBytes = torrent.stream?.bufferedAheadBytes() ?: 0
                     torrent.stream?.boostFrontier()
                     if (++samples >= RATE_SETTLE_SAMPLES) config.rateSettled = true
+                    if (samples % DISK_CHECK_EVERY == 0) torrent.stream?.let { enforceBudget(torrent, it, config) }
                     if (samples % MONITOR_LOG_EVERY == 0) {
                         Log.i(
                             TAG,
@@ -282,6 +283,21 @@ class TorrentEngine(context: Context) {
                 delay(MONITOR_INTERVAL_MS)
             }
         }
+    }
+
+    /**
+     * Safety net for the ring cache: checks the blocks the streamed file really occupies on disk. If they
+     * exceed the budget anyway (data the prioritizer could not free), the torrent is restarted at the read
+     * position with an empty cache rather than letting the download fill the device.
+     */
+    private suspend fun enforceBudget(torrent: ActiveTorrent, stream: StreamPrioritizer, config: StreamConfig) {
+        val position = stream.readPosition()
+        if (position < 0) return
+        val allocated = stream.allocatedBytes()
+        val limit = config.budget.totalBytes * 5 / 4 + DISK_GUARD_SLACK_BYTES
+        if (allocated <= limit) return
+        Log.w(TAG, "Stream occupies ${allocated shr 20} MB, budget ${config.budget.totalBytes shr 20} MB: restarting")
+        restart(torrent, position)
     }
 
     /** The active stream of [infoHash], for the player's load control. */
@@ -507,6 +523,9 @@ class TorrentEngine(context: Context) {
         const val RATE_SETTLE_SAMPLES = 15
         const val MONITOR_LOG_EVERY = 5
         const val MONITOR_MAP_PIECES = 40
+        const val DISK_CHECK_EVERY = 5
+        /** Head, tail, partially downloaded pieces: the file may exceed the budget by this much legitimately. */
+        const val DISK_GUARD_SLACK_BYTES = 64L * 1024 * 1024
 
         val ALERT_MASK = alert.error_notification
             .or_(alert.status_notification)

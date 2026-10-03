@@ -43,7 +43,7 @@ Single activity (`MainActivity`) with Compose for TV (`androidx.tv:tv-material`)
 - Playback path: `TorrentUris` (`torrent://<infohash>/<fileIndex>`) → `player/TorrentDataSource` (Media3 `BaseDataSource`) → `TorrentReader`.
   - `TorrentReader` blocks the loader thread in `ActiveTorrent.awaitPiece()` until the piece arrives (via `PieceFinishedAlert`, with a polling fallback). ExoPlayer cancels loads by interrupting the thread, so the wait must stay interruptible.
 - **The cache is a bounded ring, not a full download.** TV boxes have a few hundred MB free, while files can be 60+ GB.
-  - `StreamBudget.fromFreeSpace` sizes it at 60% of free space, keeps a 256 MB reserve, and caps it at 4 GB. Below `minimumFreeBytes`, `prepareStream` throws `INSUFFICIENT_SPACE`.
+  - `StreamBudget.forStream` sizes it from the file, not the disk: about 5 min of video at a bitrate estimated as file size / 90 min, clamped to 128 MB–1.5 GB. It is further capped at 60% of free space minus a 256 MB reserve. Below `minimumFreeBytes`, `prepareStream` throws `INSUFFICIENT_SPACE`.
   - `StreamWindow` is pure piece arithmetic and is unit-tested.
   - `StreamPrioritizer` (one per played file, held by `ActiveTorrent.stream`):
     - Only the read-ahead window has non-zero piece priority. The window is sized by the budget, and by the bitrate (at most 10 min ahead) once the player reports it via `engine.setBitrate`.
@@ -52,6 +52,8 @@ Single activity (`MainActivity`) with Compose for TV (`androidx.tv:tv-material`)
     - The engine monitor merges libtorrent's piece bitmap into `ActiveTorrent` every second, so a dropped piece-finished alert cannot stall the buffer metric or the freeing of space.
     - The file head (first 2 MB: container header), the tail (MKV Cues / MP4 `moov`) and subtitle files are pinned at top priority. Reads of head/tail while the window is elsewhere are lookups and do not move the window: when resuming mid-film the demuxer reads header, then index, then jumps to the resume point.
   - Pieces behind the "behind" budget are freed with `fallocate(PUNCH_HOLE)` through the JNI shim `NativeFs` (`app/src/main/cpp`). They are marked discarded in `ActiveTorrent` *before* punching.
+    - Freeing works from a `touched` set (every piece ever wanted), not a forward cursor, so data from before a seek back and partial pieces left by a jump are freed too. Leftovers ahead of the window are freed only when the cache is over budget.
+    - Safety net: every 5 s the engine monitor checks the file's real allocated blocks (`st_blocks`). Above 1.25× budget + 64 MB it restarts the torrent at the read position.
   - Reading a discarded piece (a seek back) calls `engine.restartFrom()`: the torrent is re-added as a new generation from metadata, and `TorrentReader` transparently switches to it. This is also the fallback when the filesystem cannot punch holes.
   - The streamed file keeps file priority LOW, never 0. libtorrent writes pieces of zero-priority files into its part file, not the file the player reads.
 - **Dynamic prebuffer.** `PrebufferPolicy` sets the required buffer: 0 (player default) while download ≥ 1.5× bitrate, up to 100 s as the margin shrinks, capped by the disk budget.

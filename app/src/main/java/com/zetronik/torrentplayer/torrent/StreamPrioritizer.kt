@@ -1,8 +1,11 @@
 package com.zetronik.torrentplayer.torrent
 
+import android.system.ErrnoException
+import android.system.Os
 import android.util.Log
 import org.libtorrent4j.Priority
 import java.io.File
+import java.util.BitSet
 
 /** What is being streamed from a torrent. Outlives torrent generations (see [TorrentEngine.restartFrom]). */
 class StreamConfig(
@@ -90,7 +93,14 @@ class StreamPrioritizer(private val torrent: ActiveTorrent, private val config: 
 
     private var readPiece = -1
     private var wanted = IntRange.EMPTY
-    private var discardCursor = window.firstPiece
+    /**
+     * Pieces of the file that may hold data on disk: everything that was ever wanted and not freed since.
+     * Freeing works from this set rather than a forward-moving cursor, so data downloaded before a seek
+     * back, or partially downloaded pieces left behind by a jump, are freed too.
+     */
+    private val touched = BitSet()
+    /** Freed before they completed: blocks still in flight may land later, so they are freed again then. */
+    private val freedIncomplete = BitSet()
     /** Last piece that already got a deadline in the ordered range. */
     private var deadlineEnd = -1
     /** Bytes behind the read position that could not be freed (no hole punching on this filesystem). */
@@ -118,7 +128,12 @@ class StreamPrioritizer(private val torrent: ActiveTorrent, private val config: 
         for (p in tail) priorities[p] = Priority.TOP_PRIORITY
         val start = pieceAt(startPosition)
         val deferWindow = !exact && start !in head
-        if (!deferWindow) for (p in window.wanted(start, config.bitrate)) priorities[p] = Priority.DEFAULT
+        if (!deferWindow) {
+            for (p in window.wanted(start, config.bitrate)) {
+                priorities[p] = Priority.DEFAULT
+                touch(p)
+            }
+        }
         handle.prioritizePieces(priorities)
 
         readPiece = -1
@@ -165,6 +180,7 @@ class StreamPrioritizer(private val torrent: ActiveTorrent, private val config: 
         }
         for (p in newWanted) {
             if (p !in wanted && !torrent.hasPiece(p)) handle.piecePriority(p, Priority.DEFAULT)
+            touch(p)
         }
         wanted = newWanted
 
@@ -187,7 +203,7 @@ class StreamPrioritizer(private val torrent: ActiveTorrent, private val config: 
         }
         deadlineEnd = maxOf(deadlineEnd, orderedEnd)
 
-        freeBehind(piece)
+        freeOutsideWindow(piece)
         return !config.punchUnsupported || unfreedBytes <= config.budget.totalBytes
     }
 
@@ -243,32 +259,88 @@ class StreamPrioritizer(private val torrent: ActiveTorrent, private val config: 
         return torrent.contiguousPieces(readPiece, window.lastPiece) * pieceLength
     }
 
-    private fun freeBehind(piece: Int) {
-        val limit = window.discardBefore(piece)
-        while (discardCursor < limit) {
-            val p = discardCursor++
-            // The header is tiny and re-read by some demuxers; the tail holds the index.
-            if (p in head || p in tail || !torrent.hasPiece(p)) continue
-            val start = maxOf(p * pieceLength, fileOffset) - fileOffset
-            val end = minOf((p + 1) * pieceLength, fileOffset + fileSize) - fileOffset
-            if (config.punchUnsupported) {
-                unfreedBytes += end - start
-                continue
-            }
-            torrent.markDiscarded(p)
-            val result = NativeFs.punchHole(path, start, end - start)
-            if (result != 0) {
-                Log.w(TAG, "Cannot free piece $p of $path: errno ${-result}; falling back to restarts")
-                config.punchUnsupported = true
-                unfreedBytes += end - start
-            } else {
-                freedBytes += end - start
-                if (++freedPieces % LOG_EVERY_FREED == 0) {
-                    Log.i(TAG, "Freed $freedPieces pieces (${freedBytes shr 20} MB) behind piece $piece")
+    /** Read position in bytes from the start of the file, or -1 before the first playback read. */
+    @Synchronized
+    fun readPosition(): Long = if (readPiece < 0) -1 else maxOf(0, readPiece * pieceLength - fileOffset)
+
+    /** Disk space the streamed file really occupies (allocated blocks, holes excluded). */
+    fun allocatedBytes(): Long = try {
+        Os.stat(path).st_blocks * 512
+    } catch (_: ErrnoException) {
+        0 // not created yet
+    }
+
+    // The header is tiny and re-read by some demuxers; the tail holds the index. Both stay for the session.
+    private fun touch(piece: Int) {
+        if (piece !in head && piece !in tail) touched.set(piece)
+    }
+
+    /**
+     * Frees everything outside the ring: pieces further behind [piece] than the "behind" budget always,
+     * leftovers ahead of the window (from before a seek back) when they push the cache over its budget.
+     */
+    private fun freeOutsideWindow(piece: Int) {
+        if (!config.punchUnsupported) {
+            // Pieces freed while incomplete that have completed since: their late blocks were written.
+            var p = freedIncomplete.nextSetBit(0)
+            while (p >= 0) {
+                if (torrent.isDownloaded(p)) {
+                    freedIncomplete.clear(p)
+                    punch(p, p + 1)
                 }
+                p = freedIncomplete.nextSetBit(p + 1)
+            }
+        }
+        freeTouched(window.firstPiece, window.discardBefore(piece))
+        if (touched.cardinality() * pieceLength > config.budget.totalBytes) {
+            freeTouched(wanted.last + 1, window.lastPiece + 1)
+        }
+    }
+
+    /** Frees the touched pieces in `[from, until)`, one hole per contiguous run. */
+    private fun freeTouched(from: Int, until: Int) {
+        var start = touched.nextSetBit(maxOf(from, 0))
+        while (start in 0 until until) {
+            val end = minOf(touched.nextClearBit(start), until)
+            touched.clear(start, end)
+            if (config.punchUnsupported) {
+                unfreedBytes += byteEnd(end) - byteStart(start)
+            } else {
+                for (p in start until end) {
+                    // Marked before the blocks go, so no reader starts reading them meanwhile.
+                    torrent.markDiscarded(p)
+                    if (!torrent.isDownloaded(p)) freedIncomplete.set(p)
+                }
+                punch(start, end)
+            }
+            start = touched.nextSetBit(end)
+        }
+    }
+
+    /** Punches a hole over pieces `[start, end)` of the file. */
+    private fun punch(start: Int, end: Int) {
+        val from = byteStart(start)
+        val length = byteEnd(end) - from
+        if (length <= 0) return
+        val result = NativeFs.punchHole(path, from, length)
+        if (result != 0) {
+            Log.w(TAG, "Cannot free pieces $start..${end - 1} of $path: errno ${-result}; falling back to restarts")
+            config.punchUnsupported = true
+            unfreedBytes += length
+        } else {
+            freedBytes += length
+            val before = freedPieces
+            freedPieces += end - start
+            if (freedPieces / LOG_EVERY_FREED != before / LOG_EVERY_FREED) {
+                Log.i(TAG, "Freed $freedPieces pieces (${freedBytes shr 20} MB), reading piece $readPiece")
             }
         }
     }
+
+    private fun byteStart(piece: Int): Long = maxOf(piece * pieceLength, fileOffset) - fileOffset
+
+    private fun byteEnd(pieceExclusive: Int): Long =
+        minOf(pieceExclusive * pieceLength, fileOffset + fileSize) - fileOffset
 
     private companion object {
         const val TAG = "StreamPrioritizer"

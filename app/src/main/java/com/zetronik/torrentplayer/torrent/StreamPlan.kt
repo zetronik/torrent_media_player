@@ -9,16 +9,28 @@ data class StreamBudget(val aheadBytes: Long, val behindBytes: Long) {
 
     companion object {
         private const val MB = 1024L * 1024
-        private const val MAX_TOTAL = 4096 * MB
         private const val MIN_TOTAL = 96 * MB
         /** Never push the device into its low-storage state: Android starts wiping app caches there. */
         private const val RESERVE = 256 * MB
         private const val MAX_BEHIND = 256 * MB
 
-        /** Budget for the given free space, or `null` when there is not enough room to stream at all. */
-        fun fromFreeSpace(freeBytes: Long): StreamBudget? {
-            val total = minOf(freeBytes * 6 / 10, freeBytes - RESERVE, MAX_TOTAL)
-            if (total < MIN_TOTAL) return null
+        /** The cache holds about this much video, at a bitrate estimated from the file size. */
+        private const val CACHE_SECONDS = 5 * 60L
+        /** Short on purpose: a shorter assumed duration means a higher estimated bitrate, more cache. */
+        private const val ASSUMED_DURATION_SECONDS = 90 * 60L
+        private const val MIN_CACHE = 128 * MB
+        private const val MAX_CACHE = 1536 * MB
+
+        /**
+         * Budget for streaming a file of [fileSize] bytes: a few minutes of video, not a share of the disk.
+         * It is further limited by [freeBytes]. Returns `null` when there is not enough room to stream at all.
+         */
+        fun forStream(fileSize: Long, freeBytes: Long): StreamBudget? {
+            val spaceCap = minOf(freeBytes * 6 / 10, freeBytes - RESERVE)
+            if (spaceCap < MIN_TOTAL) return null
+            val estimatedBitrate = fileSize / ASSUMED_DURATION_SECONDS
+            val wanted = (estimatedBitrate * CACHE_SECONDS).coerceIn(MIN_CACHE, MAX_CACHE)
+            val total = minOf(wanted, spaceCap)
             val behind = minOf(total * 15 / 100, MAX_BEHIND)
             return StreamBudget(aheadBytes = total - behind, behindBytes = behind)
         }

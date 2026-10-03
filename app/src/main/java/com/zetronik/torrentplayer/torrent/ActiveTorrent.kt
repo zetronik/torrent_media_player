@@ -73,6 +73,9 @@ class ActiveTorrent(
     /** Downloaded and still on disk. */
     fun hasPiece(piece: Int): Boolean = lock.withLock { havePieces.get(piece) && !discardedPieces.get(piece) }
 
+    /** Downloaded at some point, whether or not it was freed since. */
+    fun isDownloaded(piece: Int): Boolean = lock.withLock { havePieces.get(piece) }
+
     fun isDiscarded(piece: Int): Boolean = lock.withLock { discardedPieces.get(piece) }
 
     /** Marks a piece as gone *before* its blocks are freed, so no reader starts reading it meanwhile. */

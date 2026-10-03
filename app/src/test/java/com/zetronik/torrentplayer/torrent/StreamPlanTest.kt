@@ -12,25 +12,32 @@ class StreamPlanTest {
 
     @Test
     fun budgetOnNearlyFullTvKeepsReserve() {
-        // The TCL test TV: ~558 MB free.
-        val budget = StreamBudget.fromFreeSpace(558 * mb)!!
+        // The TCL test TV: ~558 MB free, 60 GB remux.
+        val budget = StreamBudget.forStream(60_000 * mb, 558 * mb)!!
         assertEquals(302 * mb, budget.totalBytes)
         assertTrue("must stay above the low-storage reserve", 558 * mb - budget.totalBytes >= 256 * mb)
         assertTrue(budget.behindBytes in 1..budget.totalBytes / 5)
     }
 
     @Test
-    fun budgetIsCappedOnLargeDisks() {
-        val budget = StreamBudget.fromFreeSpace(100_000 * mb)!!
-        assertEquals(4096 * mb, budget.totalBytes)
-        assertEquals(256 * mb, budget.behindBytes)
+    fun budgetFollowsFileSizeNotFreeSpace() {
+        val free = 100_000 * mb
+        // Huge remux: capped, a small share of the disk.
+        assertEquals(1536 * mb, StreamBudget.forStream(60_000 * mb, free)!!.totalBytes)
+        // 10 GB film: about five minutes of video at the estimated bitrate.
+        assertTrue(StreamBudget.forStream(10_240 * mb, free)!!.totalBytes in 500 * mb..600 * mb)
+        // Small file: the floor.
+        val small = StreamBudget.forStream(1400 * mb, free)!!
+        assertEquals(128 * mb, small.totalBytes)
+        assertTrue(small.behindBytes in 1..small.totalBytes / 5)
     }
 
     @Test
     fun noBudgetWhenDiskIsFull() {
-        assertNull(StreamBudget.fromFreeSpace(300 * mb))
-        assertNotNull(StreamBudget.fromFreeSpace(StreamBudget.minimumFreeBytes))
-        assertNull(StreamBudget.fromFreeSpace(StreamBudget.minimumFreeBytes - 1))
+        val file = 10_000 * mb
+        assertNull(StreamBudget.forStream(file, 300 * mb))
+        assertNotNull(StreamBudget.forStream(file, StreamBudget.minimumFreeBytes))
+        assertNull(StreamBudget.forStream(file, StreamBudget.minimumFreeBytes - 1))
     }
 
     @Test
