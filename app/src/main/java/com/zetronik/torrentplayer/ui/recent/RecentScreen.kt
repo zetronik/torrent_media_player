@@ -2,15 +2,14 @@ package com.zetronik.torrentplayer.ui.recent
 
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -18,7 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,14 +31,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -60,13 +57,21 @@ import com.zetronik.torrentplayer.ui.common.AppButton
 import com.zetronik.torrentplayer.ui.common.AppListItem
 import com.zetronik.torrentplayer.ui.common.ConfirmDialog
 import com.zetronik.torrentplayer.ui.common.DialogOption
+import com.zetronik.torrentplayer.ui.common.DisclosureIndicator
+import com.zetronik.torrentplayer.ui.common.IconBadge
+import com.zetronik.torrentplayer.ui.common.ItemPosition
 import com.zetronik.torrentplayer.ui.common.OptionsDialog
+import com.zetronik.torrentplayer.ui.common.ScreenHeader
+import com.zetronik.torrentplayer.ui.common.ToolbarAction
 import com.zetronik.torrentplayer.ui.common.formatDate
 import com.zetronik.torrentplayer.ui.common.formatSize
+import com.zetronik.torrentplayer.ui.common.isKeyboardNavigation
+import com.zetronik.torrentplayer.ui.common.listItemSpacing
+import com.zetronik.torrentplayer.ui.common.readableWidth
 import com.zetronik.torrentplayer.ui.common.rememberItemFocusRequester
 import com.zetronik.torrentplayer.ui.common.requestFocusSafely
 import com.zetronik.torrentplayer.ui.common.toast
-import com.zetronik.torrentplayer.ui.theme.LocalIsTv
+import com.zetronik.torrentplayer.ui.theme.AppTheme
 import com.zetronik.torrentplayer.ui.theme.LocalScreenPadding
 
 @Composable
@@ -102,13 +107,18 @@ fun RecentScreen(onOpenTorrent: (source: String) -> Unit) {
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(LocalScreenPadding.current)
+            .padding(LocalScreenPadding.current),
+        contentAlignment = Alignment.TopCenter,
     ) {
         val current = items
+        val content = Modifier
+            .readableWidth()
+            .fillMaxSize()
         when {
             current == null -> Unit
-            current.isEmpty() -> EmptyState(onPaste = pasteFromClipboard)
+            current.isEmpty() -> EmptyState(onPaste = pasteFromClipboard, modifier = content)
             else -> RecentList(
+                modifier = content,
                 items = current,
                 refreshing = refreshing,
                 onPaste = pasteFromClipboard,
@@ -130,33 +140,48 @@ fun RecentScreen(onOpenTorrent: (source: String) -> Unit) {
                 confirmClear = false
             },
             onDismiss = { confirmClear = false },
+            destructive = true,
         )
     }
 }
 
 @Composable
-private fun EmptyState(onPaste: () -> Unit) {
+private fun EmptyState(onPaste: () -> Unit, modifier: Modifier) {
     val focus = remember { FocusRequester() }
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        ToolbarButton(R.drawable.ic_paste, stringResource(R.string.paste_from_clipboard), onPaste, Modifier.focusRequester(focus))
-        Spacer(Modifier.size(24.dp))
-        Text(
-            text = stringResource(R.string.recent_empty_hint),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(max = 520.dp),
-        )
+    Column(modifier) {
+        ScreenHeader(stringResource(R.string.recent_title))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = stringResource(R.string.recent_empty_hint),
+                style = MaterialTheme.typography.bodyLarge,
+                color = AppTheme.colors.secondaryLabel,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 520.dp),
+            )
+            AppButton(
+                onClick = onPaste,
+                modifier = Modifier.focusRequester(focus),
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+            ) {
+                Icon(painterResource(R.drawable.ic_paste), contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.paste_from_clipboard))
+            }
+        }
     }
-    LaunchedEffect(Unit) { focus.requestFocusSafely() }
+    val keyboardNavigation = isKeyboardNavigation()
+    LaunchedEffect(Unit) { if (keyboardNavigation) focus.requestFocusSafely() }
 }
 
 @Composable
 private fun RecentList(
+    modifier: Modifier,
     items: List<RecentTorrent>,
     refreshing: Boolean,
     onPaste: () -> Unit,
@@ -167,7 +192,7 @@ private fun RecentList(
     onDelete: (RecentTorrent) -> Unit,
 ) {
     // Initial focus only helps D-pad/keyboard users; on touch it would just show a stray highlight.
-    val keyboardNavigation = LocalIsTv.current || LocalInputModeManager.current.inputMode == InputMode.Keyboard
+    val keyboardNavigation = isKeyboardNavigation()
     val listState = rememberLazyListState()
     // Survives navigation to the torrent screen and back, so focus returns to the item that was opened.
     var lastOpened by rememberSaveable { mutableStateOf<String?>(null) }
@@ -177,39 +202,33 @@ private fun RecentList(
     // Where focus goes once the list settles after a dialog: the same item, or a neighbour of a deleted one.
     var pendingFocus by remember { mutableStateOf<String?>(null) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ToolbarButton(
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        ScreenHeader(stringResource(R.string.recent_title)) {
+            ToolbarAction(
                 R.drawable.ic_paste,
                 stringResource(R.string.paste_from_clipboard),
                 onPaste,
                 Modifier.focusRequester(pasteFocus),
+                prominent = true,
             )
-            Spacer(Modifier.width(12.dp))
-            ToolbarButton(
+            ToolbarAction(
                 R.drawable.ic_refresh,
                 stringResource(if (refreshing) R.string.recent_refreshing else R.string.recent_refresh),
                 onRefreshAll,
+                busy = refreshing,
             )
-            Spacer(Modifier.width(12.dp))
-            ToolbarButton(R.drawable.ic_delete, stringResource(R.string.recent_clear), onClearAll)
-            Spacer(Modifier.width(24.dp))
-            Text(
-                stringResource(R.string.recent_title),
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            ToolbarAction(R.drawable.ic_delete, stringResource(R.string.recent_clear), onClearAll)
         }
         LazyColumn(
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(listItemSpacing()),
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            items(items, key = { it.infoHash }) { torrent ->
+            itemsIndexed(items, key = { _, item -> item.infoHash }) { index, torrent ->
                 val focus = rememberItemFocusRequester(itemFocus, torrent.infoHash)
                 RecentItem(
                     torrent = torrent,
+                    position = ItemPosition.of(index, items.size),
                     onClick = {
                         lastOpened = torrent.infoHash
                         onOpen(torrent)
@@ -264,6 +283,7 @@ private fun RecentList(
 @Composable
 private fun RecentItem(
     torrent: RecentTorrent,
+    position: ItemPosition,
     onClick: () -> Unit,
     onActions: () -> Unit,
     modifier: Modifier = Modifier,
@@ -272,6 +292,7 @@ private fun RecentItem(
     AppListItem(
         selected = false,
         onClick = onClick,
+        position = position,
         // Long OK press on the remote, long tap on touch screens; the remote's Menu key does the same.
         onLongClick = onActions,
         modifier = modifier.onKeyEvent { event ->
@@ -282,7 +303,7 @@ private fun RecentItem(
                 false
             }
         },
-        headlineContent = { Text(torrent.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        headlineContent = { Text(torrent.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
             Text(
                 stringResource(
@@ -292,25 +313,13 @@ private fun RecentItem(
                     torrent.peers,
                     formatDate(torrent.lastOpenedAt),
                 ),
-                maxLines = 1,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         },
-        leadingContent = { Icon(painterResource(R.drawable.ic_movie), contentDescription = null) },
+        leadingContent = { IconBadge(R.drawable.ic_movie) },
+        trailingContent = { DisclosureIndicator() },
     )
-}
-
-@Composable
-private fun ToolbarButton(
-    @DrawableRes icon: Int,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    AppButton(onClick = onClick, modifier = modifier, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
-        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label)
-    }
 }
 
 private sealed interface ClipboardResult {

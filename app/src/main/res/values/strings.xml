@@ -41,6 +41,13 @@
     <string name="player_subtitles_off">Выключены</string>
     <string name="player_audio_title">Аудиодорожка</string>
     <string name="player_subtitles_title">Субтитры</string>
+    <string name="player_previous">Предыдущее видео</string>
+    <string name="player_next">Следующее видео</string>
+    <string name="player_playlist">Плейлист</string>
+    <string name="player_scale_fit">Стандарт</string>
+    <string name="player_scale_fit_width">По ширине</string>
+    <string name="player_scale_stretch">Растянуть</string>
+    <string name="player_scale_crop">Обрезать</string>
     <string name="player_buffering_stats">%1$s · сиды %2$d · пиры %3$d</string>
     <string name="player_error_details">Не удалось воспроизвести видео: %1$s</string>
     <string name="player_insufficient_space">Недостаточно места на устройстве: свободно %1$s, нужно не меньше %2$s. Освободите место и попробуйте снова.</string>
@@ -51,6 +58,36 @@
     <string name="track_channels_mono">моно</string>
     <string name="track_channels_stereo">стерео</string>
     <string name="track_external">внешние</string>
+
+    <!-- Play on TV -->
+    <string name="remote_cast">Смотреть на телевизоре</string>
+    <string name="remote_searching">Поиск телевизоров…</string>
+    <string name="remote_search_hint">На телевизоре должен быть открыт Torrent Player, а оба устройства подключены к одной сети.</string>
+    <string name="remote_paired">Подключён</string>
+    <string name="remote_not_paired">Нужна привязка</string>
+    <string name="remote_pairing_enter">Введите код с экрана телевизора «%1$s»</string>
+    <string name="remote_pairing_wrong">Неверный код</string>
+    <string name="remote_connect">Подключить</string>
+    <string name="remote_sending">Подключение к «%1$s»…</string>
+    <string name="remote_error_unreachable">Телевизор не отвечает. Проверьте, что на нём открыт Torrent Player.</string>
+    <string name="remote_error_failed">Телевизор не смог открыть видео</string>
+    <string name="remote_error_pairing">Привязка не удалась, попробуйте ещё раз</string>
+    <string name="remote_pairing_title">Подключение устройства «%1$s»</string>
+    <string name="remote_pairing_hint">Введите этот код на телефоне</string>
+    <string name="remote_playing_on">Телевизор «%1$s»</string>
+    <string name="remote_inactive">Плеер на телевизоре закрыт</string>
+    <string name="remote_connection_lost">Нет связи с телевизором</string>
+    <string name="remote_loading">Загрузка…</string>
+    <string name="remote_tv_error">Ошибка на телевизоре: %1$s</string>
+    <string name="remote_continue_here">Смотреть на телефоне</string>
+    <string name="remote_stop">Остановить на ТВ</string>
+    <string name="back">Назад</string>
+    <string name="player_rewind">Назад на 10 секунд</string>
+    <string name="player_forward">Вперёд на 10 секунд</string>
+
+    <!-- Templates -->
+    <string name="template_ios">iOS</string>
+    <string name="template_classic">Классический</string>
 
     <!-- Units -->
     <string name="unit_bytes">%1$s Б</string>

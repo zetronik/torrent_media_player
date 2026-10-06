@@ -80,12 +80,55 @@ Single activity (`MainActivity`) with Compose for TV (`androidx.tv:tv-material`)
   - Controls hidden: a root `onPreviewKeyEvent` handles OK/←/→/↑/↓ and media keys. Key-ups whose key-downs were consumed there are swallowed, so they don't click the newly focused button.
   - Controls shown: normal focus traversal.
 - Repeated seeks are accumulated in `PlayerViewModel.seekBy` and committed once (each real seek restarts torrent prioritization).
+- Controls layout: title and audio/subtitles/playlist icon buttons at the top. At the bottom: the seek bar, and under it the time, prev/play/next (the spinner replaces the play icon while buffering) and the scale button (`VideoScale`, saved in SharedPreferences). While the controls are shown, subtitles are lifted above the seek bar (`setBottomPaddingFraction`).
+- Playlist: a torrent's `videoFiles`, or local videos opened together (VIEW clip data / `SEND_MULTIPLE`, passed in `PlayerRoute.playlistUris`). `PlayerViewModel.playItem` switches in place with the same player: stop, `engine.resetData`, then prepare the new file. Playback advances to the next item at the end.
+- Subtitles use a fixed `CaptionStyleCompat`: white with a black outline, no background box.
 - Recent list management: toolbar refresh/clear, per-item actions via long press or the remote Menu key (`OptionsDialog`). Seed/peer refresh uses `TrackerScraper`: its own UDP (BEP 15) and HTTP scrape client, independent of the single-torrent libtorrent session, one batched request per tracker. Trackers come from each magnet `tr=` plus `PublicTrackers`.
 - Playback positions are saved in Room (`PlaybackPosition`, key `<infohash>:<index>` or the content URI).
 
+### Play on TV (`remote/`, `ui/remote/`)
+
+A phone sends the torrent it plays to the app on a TV in the same network; the TV downloads and plays it itself, and the phone becomes a remote. No Google Cast.
+
+- Protocol (`RemoteProtocol`): the TV advertises `_torrentplayer._tcp` over NSD with its stable id in the `id` TXT attribute. One TCP connection = one JSON line request + one JSON line response. Plain sockets, not HTTP: cleartext HTTP is blocked at this targetSdk.
+- TV side (`RemoteReceiver`): runs only on TV and only while `MainActivity` is started (`onStart`/`onStop`), because a background app cannot bring the player to the front. Pairing: the phone asks, the TV shows a 4-digit code (`PairingCodeDialog`, at most 3 tries, 2 min), the phone gets a token kept in the TV's prefs.
+- `play` imports the `.torrent` the phone sends (`TorrentEngine.importMetadata`), so the TV skips the metadata download, then opens it through `NavRequest.PlayTorrent`.
+  - If the TV's player already has that torrent, it switches file in place (`RemotePlayback.playFile`).
+  - If its file list is open, the player is pushed on top. Popping that screen would close the torrent the player needs.
+  - `PlayerRoute.startPositionMs` carries the position across devices.
+- The open `PlayerViewModel` registers itself in `RemoteSession` as `RemotePlayback`: status (with track labels) and commands, always on the main thread. "Stop" sets `UiState.exitRequested`.
+- Phone side: the cast button shows in the player for torrents on non-TV devices. `CastDialog` handles discovery (`DeviceDiscovery`), pairing and sending. `RemoteScreen` polls the status every second. "Watch on phone" stops the TV and reopens the player at the TV's position.
+- Not done yet: sending local (non-torrent) videos. That would need the phone to serve the file.
+
+### Theme and templates (`ui/theme/`)
+
+- The look is a swappable `AppTemplate` (`AppTemplates.all`: `ios` by default, `classic`). It holds semantic `AppColors` (dark, plus an optional light set), corner radii (`AppShapes`, separate for phone and TV), typography for phone and TV, and the touch list style (`InsetGrouped` or `Cards`).
+- `UiPreferences` (in `AppContainer`) stores the template id and `ThemeMode` (System/Light/Dark) as flows. `TorrentPlayerTheme` follows them live. There is no picker UI yet: a settings screen only needs to call `setTemplate` / `setThemeMode`.
+- TV is always dark and uses `Cards`, with tvOS-style focus (a white card with black text). Phones and tablets follow the system light/dark setting when the template has a light set. The theme also sets the status/navigation bar icon colours (the activity is edge-to-edge).
+- Read tokens through `AppTheme.colors / shapes / listStyle / layout`. tv-material components get the same values through the derived `MaterialTheme`. Never hardcode colours outside the player, which is always white-on-black over the video. A new template is just a new entry in `AppTemplates.kt` plus its name string.
+- iOS text styles are mapped onto Material slots: headlineMedium = Large Title, headlineSmall = Title 2, titleLarge = Title 3, titleMedium = Headline, bodyLarge = Body, bodyMedium = Subheadline, bodySmall = Footnote.
+
+### Adaptive layout
+
+- `AppLayout` (`AppTheme.layout`) is computed from the window, not the screen, so split screen counts:
+  - `isCompact`: non-TV and under 600 dp wide;
+  - `isShort`: phone landscape, under 480 dp tall;
+  - `isExpanded`: 840 dp and wider.
+- Rule against squeezed buttons: anything with a label gets `weight(1f, fill = false)` in its row, so it ellipsizes instead of crushing its neighbours. In compact windows button rows become icon-only (`ToolbarAction`), stacked (`RemoteScreen` session buttons) or wrapped (`FlowRow`). A row of fixed-size controls is scaled as a whole (`BoxWithConstraints` in `RemoteScreen`).
+- `ui/common/Layout.kt` has the shared pieces:
+  - `ScreenHeader`: iOS nav bar. Compact: actions bar plus a Large Title. Wide: one line with the smaller inline title (TV keeps the Large Title). The back chevron shows on touch only.
+  - `ToolbarAction`: labelled on TV and expanded windows, icon-only on phones; `prominent` always keeps its label.
+  - Also `IconBadge`, `DisclosureIndicator` (touch only), `readableWidth()` (caps content at 1040 dp on large tablets) and `AppDialog`.
+- Player controls in compact mode: the close/track buttons get their own bar above the title, the times sit under the seek bar ends, and the scale button is icon-only (the new mode flashes as `ScaleHint`). Touch screens get a close button; TV uses the Back key.
+
 ### UI conventions
 
-- **tv-material clickable components (`Button`, `ListItem`, `Surface`) only react to D-pad/Enter, not touch.** Always use the wrappers in `ui/common/TouchSupport.kt` (`AppButton`, `AppOutlinedButton`, `AppListItem`), which add tap and long-press.
+- **tv-material clickable components (`Button`, `ListItem`, `Surface`) only react to D-pad/Enter, not touch.** Always use the wrappers in `ui/common/TouchSupport.kt`. They add tap and long-press, feed touches into the component's interaction source (pressed state after 60 ms, so scrolling does not flash rows) and apply the template:
+  - `AppButton`: filled;
+  - `AppSecondaryButton`: tinted;
+  - `AppIconButton`: round;
+  - `AppListItem`: pass `ItemPosition.of(index, count)` for grouped corners and separators, and space rows with `listItemSpacing()`.
+- Initial focus is only requested when `isKeyboardNavigation()` is true (TV or keyboard input mode). On touch a focused control would show a stray highlight.
 - Focus restoration when returning to a list: `rememberSaveable` holds the last-opened key, `rememberItemFocusRequester` registers per-item requesters, and a `LaunchedEffect` scrolls to the item and requests focus. It only runs on TV or in keyboard input mode. Use `requestFocusSafely()` (`requestFocus` throws when the node is not attached).
 - Low-end TV performance: screen transitions are a 150 ms fade, and none for the player. Position polling (`PlayerViewModel.progress`) runs only while the controls are composed. `LoadingIndicator` animates in the graphics layer only.
 - Screens apply `LocalScreenPadding` (overscan-safe on TV) and `WindowInsets.safeDrawing`.

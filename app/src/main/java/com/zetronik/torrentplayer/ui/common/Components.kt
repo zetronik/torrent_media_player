@@ -12,9 +12,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -22,27 +22,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.zetronik.torrentplayer.R
+import com.zetronik.torrentplayer.ui.theme.LocalIsTv
 
 /**
  * Rotating arc. The rotation runs in the graphics layer, so each frame is a cheap transform
@@ -73,36 +74,46 @@ fun LoadingIndicator(modifier: Modifier = Modifier, size: Dp = 48.dp, color: Col
     }
 }
 
+/** iOS alert: centred title, two equal-width buttons. [destructive] paints the confirm button red. */
 @Composable
 fun ConfirmDialog(
     title: String,
     confirmText: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    destructive: Boolean = false,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        val cancelFocus = remember { FocusRequester() }
-        Surface(
-            modifier = Modifier
-                .ignoreHeldConfirmKey()
-                .widthIn(max = 480.dp),
-            shape = MaterialTheme.shapes.large,
-        ) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                Row(
-                    modifier = Modifier.align(Alignment.End),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+    val cancelFocus = remember { FocusRequester() }
+    AppDialog(onDismissRequest = onDismiss, modifier = Modifier.ignoreHeldConfirmKey(), maxWidth = 420.dp) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // Equal weights: long labels wrap inside their half instead of pushing the other button out.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppSecondaryButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(cancelFocus),
                 ) {
-                    AppOutlinedButton(onClick = onDismiss, modifier = Modifier.focusRequester(cancelFocus)) {
-                        Text(stringResource(R.string.cancel))
-                    }
-                    AppButton(onClick = onConfirm) { Text(confirmText) }
+                    Text(stringResource(R.string.cancel), textAlign = TextAlign.Center)
+                }
+                AppButton(
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                    colors = if (destructive) appDestructiveButtonColors() else appButtonColors(),
+                ) {
+                    Text(confirmText, textAlign = TextAlign.Center)
                 }
             }
         }
         // The safe choice is focused, so a stray OK press does not delete anything.
-        LaunchedEffect(Unit) { cancelFocus.requestFocusSafely() }
+        val keyboardNavigation = isKeyboardNavigation()
+        LaunchedEffect(Unit) { if (keyboardNavigation) cancelFocus.requestFocusSafely() }
     }
 }
 
@@ -146,6 +157,14 @@ fun <K> rememberItemFocusRequester(registry: MutableMap<K, FocusRequester>, key:
     }
     return requester
 }
+
+/**
+ * Whether the user navigates with a D-pad or keyboard. Initial focus is only set then: on touch it would
+ * just show a stray highlight.
+ */
+@Composable
+fun isKeyboardNavigation(): Boolean =
+    LocalIsTv.current || LocalInputModeManager.current.inputMode == InputMode.Keyboard
 
 /** requestFocus() throws if the node is not attached yet (e.g. scrolled out); focus is best-effort here. */
 fun FocusRequester.requestFocusSafely() {

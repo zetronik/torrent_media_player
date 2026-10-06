@@ -1,5 +1,5 @@
 <resources>
-    <!-- Dark window background so there is no white flash before Compose draws the first frame. -->
+    <!-- Window background matches the theme (colors.xml per night / television), so there is no flash before Compose draws. -->
     <style name="Theme.TorrentPlayer" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/background</item>
         <item name="android:colorBackground">@color/background</item>

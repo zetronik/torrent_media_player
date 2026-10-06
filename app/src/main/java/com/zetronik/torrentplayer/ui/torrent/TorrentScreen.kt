@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,11 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.InputMode
-import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,25 +34,30 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.zetronik.torrentplayer.R
-import com.zetronik.torrentplayer.ui.common.AppListItem
-import com.zetronik.torrentplayer.ui.common.AppButton
 import com.zetronik.torrentplayer.appContainer
 import com.zetronik.torrentplayer.data.PlaybackPosition
 import com.zetronik.torrentplayer.torrent.TorrentException
 import com.zetronik.torrentplayer.torrent.TorrentFileEntry
 import com.zetronik.torrentplayer.torrent.TorrentMeta
 import com.zetronik.torrentplayer.torrent.TorrentStats
+import com.zetronik.torrentplayer.ui.common.AppButton
+import com.zetronik.torrentplayer.ui.common.AppListItem
+import com.zetronik.torrentplayer.ui.common.IconBadge
+import com.zetronik.torrentplayer.ui.common.ItemPosition
 import com.zetronik.torrentplayer.ui.common.LoadingIndicator
+import com.zetronik.torrentplayer.ui.common.ScreenHeader
 import com.zetronik.torrentplayer.ui.common.formatDuration
 import com.zetronik.torrentplayer.ui.common.formatSize
 import com.zetronik.torrentplayer.ui.common.formatSpeed
+import com.zetronik.torrentplayer.ui.common.isKeyboardNavigation
+import com.zetronik.torrentplayer.ui.common.listItemSpacing
+import com.zetronik.torrentplayer.ui.common.readableWidth
 import com.zetronik.torrentplayer.ui.common.rememberItemFocusRequester
 import com.zetronik.torrentplayer.ui.common.requestFocusSafely
-import com.zetronik.torrentplayer.ui.theme.LocalIsTv
+import com.zetronik.torrentplayer.ui.theme.AppTheme
 import com.zetronik.torrentplayer.ui.theme.LocalScreenPadding
 
 @Composable
@@ -75,7 +77,8 @@ fun TorrentScreen(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(LocalScreenPadding.current)
+            .padding(LocalScreenPadding.current),
+        contentAlignment = Alignment.TopCenter,
     ) {
         when (val current = state) {
             TorrentViewModel.State.Resolving ->
@@ -95,6 +98,7 @@ fun TorrentScreen(
                 stats = stats,
                 positions = positions,
                 onPlay = { onPlay(current.meta, it) },
+                onBack = onBack,
             )
         }
     }
@@ -108,9 +112,14 @@ private fun Progress(title: String, details: String?) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         LoadingIndicator()
-        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         if (details != null) {
-            Text(details, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                details,
+                style = MaterialTheme.typography.bodyLarge,
+                color = AppTheme.colors.secondaryLabel,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
@@ -141,7 +150,8 @@ private fun Failure(state: TorrentViewModel.State.Failed, onRetry: () -> Unit, o
             Text(stringResource(if (canRetry) R.string.retry else R.string.cancel))
         }
     }
-    LaunchedEffect(Unit) { focus.requestFocusSafely() }
+    val keyboardNavigation = isKeyboardNavigation()
+    LaunchedEffect(Unit) { if (keyboardNavigation) focus.requestFocusSafely() }
 }
 
 @Composable
@@ -150,33 +160,33 @@ private fun FileList(
     stats: TorrentStats,
     positions: Map<Int, PlaybackPosition>,
     onPlay: (TorrentFileEntry) -> Unit,
+    onBack: () -> Unit,
 ) {
     val resources = LocalResources.current
     // Initial focus only helps D-pad/keyboard users; on touch it would just show a stray highlight.
-    val keyboardNavigation = LocalIsTv.current || LocalInputModeManager.current.inputMode == InputMode.Keyboard
+    val keyboardNavigation = isKeyboardNavigation()
     val videos = meta.videoFiles
     val listState = rememberLazyListState()
     var lastPlayed by rememberSaveable { mutableIntStateOf(-1) }
     val itemFocus = remember { HashMap<Int, FocusRequester>() }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                meta.name,
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                listOf(
-                    resources.formatSize(meta.totalSize),
-                    stringResource(R.string.torrent_swarm, stats.seeds, stats.peers),
-                    resources.formatSpeed(stats.downloadRate),
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+    Column(
+        Modifier
+            .readableWidth()
+            .fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        ScreenHeader(
+            title = meta.name,
+            subtitle = listOf(
+                resources.formatSize(meta.totalSize),
+                stringResource(R.string.torrent_swarm, stats.seeds, stats.peers),
+                resources.formatSpeed(stats.downloadRate),
+            ).joinToString(" · "),
+            titleMaxLines = 3,
+            largeTitle = false,
+            onBack = onBack,
+        )
         if (videos.isEmpty()) {
             Text(
                 stringResource(R.string.torrent_no_video),
@@ -190,13 +200,14 @@ private fun FileList(
         }
         LazyColumn(
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(listItemSpacing()),
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            items(videos, key = { it.index }) { file ->
+            itemsIndexed(videos, key = { _, file -> file.index }) { index, file ->
                 val position = positions[file.index]
                 AppListItem(
                     selected = false,
+                    position = ItemPosition.of(index, videos.size),
                     onClick = {
                         lastPlayed = file.index
                         onPlay(file)
@@ -216,9 +227,9 @@ private fun FileList(
                                 )
                             }
                         }
-                        Text(details.joinToString(" · "), maxLines = 1)
+                        Text(details.joinToString(" · "), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     },
-                    leadingContent = { Icon(painterResource(R.drawable.ic_movie), contentDescription = null) },
+                    leadingContent = { IconBadge(if (position != null) R.drawable.ic_play else R.drawable.ic_movie) },
                 )
             }
         }

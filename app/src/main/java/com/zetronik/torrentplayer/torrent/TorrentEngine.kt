@@ -115,6 +115,27 @@ class TorrentEngine(context: Context) {
 
     fun metadataFile(infoHash: String): File = File(metadataDir, "$infoHash.torrent")
 
+    /** True while [infoHash] is the torrent in the session (its file list or player is open). */
+    fun isActive(infoHash: String): Boolean = torrents.containsKey(infoHash)
+
+    /**
+     * Stores `.torrent` [bytes] received from elsewhere (another device) as the saved metadata of [infoHash],
+     * so a later [add] of its magnet link skips the metadata download. False if the bytes are not that torrent.
+     */
+    suspend fun importMetadata(infoHash: String, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        val info = try {
+            TorrentInfo(bytes)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Received metadata is not a torrent", e)
+            return@withContext false
+        }
+        val actual = info.infoHashes().getBest().toHex()
+        if (!actual.equals(infoHash, ignoreCase = true)) return@withContext false
+        metadataDir.mkdirs()
+        writeAtomically(metadataFile(actual), bytes)
+        true
+    }
+
     /** Adds the torrent to the session (or reuses it if it is already active) and returns its info hash. */
     suspend fun add(input: TorrentInput): String = withContext(Dispatchers.IO) {
         start()

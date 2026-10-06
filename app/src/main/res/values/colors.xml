@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#FF101114</color>
+    <!-- Window background before Compose draws: the default template's background (iOS light). -->
+    <color name="background">#FFF2F2F7</color>
 </resources>

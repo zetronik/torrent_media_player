@@ -19,6 +19,7 @@ import androidx.tv.material3.MaterialTheme
 import com.zetronik.torrentplayer.torrent.TorrentUris
 import com.zetronik.torrentplayer.ui.player.PlayerScreen
 import com.zetronik.torrentplayer.ui.recent.RecentScreen
+import com.zetronik.torrentplayer.ui.remote.RemoteScreen
 import com.zetronik.torrentplayer.ui.torrent.TorrentScreen
 import kotlinx.coroutines.flow.Flow
 
@@ -34,9 +35,26 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
 
     LaunchedEffect(navController) {
         navRequests.collect { request ->
+            if (request is NavRequest.PlayTorrent) {
+                // Over the torrent's own file list the player is simply pushed: replacing that screen would
+                // close the torrent the new player is about to stream.
+                val onItsFileList = request.torrentActive && navController.currentDestination?.hasRoute<TorrentRoute>() == true
+                if (!onItsFileList) {
+                    navController.navigate(TorrentRoute(request.source)) { popUpTo<RecentRoute>() }
+                }
+                navController.navigate(request.player)
+                return@collect
+            }
             val route: Any = when (request) {
+                is NavRequest.PlayTorrent -> return@collect
                 is NavRequest.OpenTorrent -> TorrentRoute(request.source)
-                is NavRequest.PlayVideo -> PlayerRoute(uri = request.uri, title = request.title, external = true)
+                is NavRequest.PlayVideo -> PlayerRoute(
+                    uri = request.uri,
+                    title = request.title,
+                    external = true,
+                    playlistUris = request.playlist.map { it.uri },
+                    playlistTitles = request.playlist.map { it.title },
+                )
             }
             navController.navigate(route) {
                 popUpTo<RecentRoute>()
@@ -87,6 +105,17 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
             PlayerScreen(
                 onExit = {
                     if (route.external || !navController.popBackStack()) onExitApp()
+                },
+                onCast = { remote ->
+                    navController.navigate(remote) { popUpTo<PlayerRoute> { inclusive = true } }
+                },
+            )
+        }
+        composable<RemoteRoute> {
+            RemoteScreen(
+                onBack = { navController.popBackStack() },
+                onContinueHere = { player ->
+                    navController.navigate(player) { popUpTo<RemoteRoute> { inclusive = true } }
                 },
             )
         }

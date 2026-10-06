@@ -5,7 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.core.content.IntentCompat
+import androidx.core.net.toUri
 import com.zetronik.torrentplayer.torrent.TorrentInput
+import com.zetronik.torrentplayer.ui.navigation.LocalVideo
 import com.zetronik.torrentplayer.ui.navigation.NavRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,10 +21,41 @@ object IntentParser {
     private const val TORRENT_MIME = "application/x-bittorrent"
 
     suspend fun parse(context: Context, intent: Intent): NavRequest? = when (intent.action) {
-        Intent.ACTION_VIEW -> intent.data?.let { parseView(context, it, intent.type) }
+        Intent.ACTION_VIEW -> intent.data?.let { uri ->
+            val request = parseView(context, uri, intent.type)
+            // Some file managers pass the rest of a multi-selection in the clip data.
+            if (request is NavRequest.PlayVideo) withPlaylist(context, request, clipUris(intent)) else request
+        }
         Intent.ACTION_SEND -> TorrentInput.parse(intent.getStringExtra(Intent.EXTRA_TEXT))
             ?.let { NavRequest.OpenTorrent(it.source) }
+        Intent.ACTION_SEND_MULTIPLE -> parseVideos(context, sharedStreams(intent))
         else -> null
+    }
+
+    private fun clipUris(intent: Intent): List<Uri> {
+        val clip = intent.clipData ?: return emptyList()
+        return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+    }
+
+    private fun sharedStreams(intent: Intent): List<Uri> =
+        IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty() +
+            clipUris(intent)
+
+    private suspend fun parseVideos(context: Context, uris: List<Uri>): NavRequest? {
+        val first = uris.firstOrNull() ?: return null
+        val request = NavRequest.PlayVideo(first.toString(), displayName(context, first))
+        return withPlaylist(context, request, uris)
+    }
+
+    private suspend fun withPlaylist(context: Context, request: NavRequest.PlayVideo, uris: List<Uri>): NavRequest.PlayVideo {
+        val videos = (listOf(request.uri.toUri()) + uris).distinct().filter { isVideo(context, it) }
+        if (videos.size < 2) return request
+        return request.copy(playlist = videos.map { LocalVideo(it.toString(), displayName(context, it)) })
+    }
+
+    private fun isVideo(context: Context, uri: Uri): Boolean {
+        val type = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+        return type == null || type.startsWith("video/")
     }
 
     private suspend fun parseView(context: Context, uri: Uri, intentType: String?): NavRequest? {

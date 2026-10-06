@@ -72,6 +72,15 @@
                 <data android:mimeType="video/*" />
             </intent-filter>
 
+            <!-- Several videos shared at once: played as a playlist -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
             <!-- Shared text containing a magnet link or a .torrent URL -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
