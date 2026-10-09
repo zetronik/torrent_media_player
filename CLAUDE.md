@@ -23,6 +23,12 @@ Run from the repo root (`gradlew.bat` on Windows, or `./gradlew` from Git Bash).
 
 In Git Bash, prefix `adb shell` commands that contain device paths with `MSYS_NO_PATHCONV=1`, otherwise `/sdcard/...` gets rewritten to a Windows path.
 
+## Versioning
+
+- The version lives only in `version.properties` (`version=MAJOR.MINOR.PATCH`, SemVer). `app/build.gradle.kts` derives `versionName` from it (debug builds get `-debug`) and `versionCode = MAJOR*10000 + MINOR*100 + PATCH`, so MINOR and PATCH stay below 100 and the code always grows. All ABI splits share one versionCode.
+- User-facing history is in `CHANGELOG.md` (Russian, Keep a Changelog). Tags are `vX.Y.Z`.
+- The user runs `/version-commit` (`.claude/skills/version-commit/`) before committing: it picks the bump from the diff, edits `version.properties` and `CHANGELOG.md`, and prints a Conventional Commits message. The user commits, tags and pushes; Claude never does.
+
 ## Build setup
 
 - AGP 9 with built-in Kotlin: no `org.jetbrains.kotlin.android` plugin is applied in the module. It is declared `apply false` in the root build only to pin the Kotlin version, which also fixes the Compose compiler and serialization plugin versions.

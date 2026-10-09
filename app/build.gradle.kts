@@ -5,6 +5,22 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// MAJOR.MINOR.PATCH from version.properties; versionCode is derived from it, so it always grows with the name.
+val appVersion: String = providers.fileContents(rootProject.layout.projectDirectory.file("version.properties"))
+    .asText.get().lineSequence()
+    .map(String::trim)
+    .first { it.startsWith("version=") }
+    .substringAfter('=')
+val appVersionCode: Int = run {
+    val parts = appVersion.split('.').map { it.toIntOrNull() }
+    require(parts.size == 3 && parts.all { it != null && it >= 0 }) {
+        "version.properties: expected MAJOR.MINOR.PATCH, got '$appVersion'"
+    }
+    val (major, minor, patch) = parts.map { it!! }
+    require(minor < 100 && patch < 100) { "version.properties: MINOR and PATCH must be below 100" }
+    major * 10000 + minor * 100 + patch
+}
+
 android {
     namespace = "com.zetronik.torrentplayer"
     compileSdk {
@@ -15,13 +31,16 @@ android {
         applicationId = "com.zetronik.torrentplayer"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            versionNameSuffix = "-debug"
+        }
         release {
             optimization {
                 enable = true
