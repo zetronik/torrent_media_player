@@ -1,6 +1,7 @@
 package com.zetronik.torrentplayer.torrent
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -38,6 +39,35 @@ class StreamPlanTest {
         assertNull(StreamBudget.forStream(file, 300 * mb))
         assertNotNull(StreamBudget.forStream(file, StreamBudget.minimumFreeBytes))
         assertNull(StreamBudget.forStream(file, StreamBudget.minimumFreeBytes - 1))
+    }
+
+    @Test
+    fun fixedSizeFromSettingsIgnoresFileSize() {
+        val free = 100_000 * mb
+        val small = StreamBudget.forStream(1400 * mb, free, 4096 * mb)!!
+        assertEquals(4096 * mb, small.totalBytes)
+        assertEquals(256 * mb, small.behindBytes)
+        assertFalse(small.timeCapped)
+        // Below the automatic floor is allowed too: the user picked it.
+        assertEquals(256 * mb, StreamBudget.forStream(60_000 * mb, free, 256 * mb)!!.totalBytes)
+        assertTrue(StreamBudget.forStream(60_000 * mb, free)!!.timeCapped)
+    }
+
+    @Test
+    fun fixedSizeIsStillLimitedByFreeSpace() {
+        // 2 GB free: at most 60% of it, and the 256 MB reserve stays free.
+        val budget = StreamBudget.forStream(20_000 * mb, 2048 * mb, 4096 * mb)!!
+        assertEquals(StreamBudget.spaceCap(2048 * mb), budget.totalBytes)
+        assertEquals(2048 * mb * 6 / 10, budget.totalBytes)
+        assertNull(StreamBudget.forStream(20_000 * mb, 300 * mb, 4096 * mb))
+    }
+
+    @Test
+    fun fixedSizeReadAheadIsNotLimitedToTenMinutes() {
+        // 1.4 GB movie, 0.25 MB/s media: automatic budgets stop at 10 minutes, a chosen size does not.
+        val budget = StreamBudget(aheadBytes = 3840 * mb, behindBytes = 256 * mb, timeCapped = false)
+        val window = StreamWindow(0, 1433, mb, budget)
+        assertEquals(3840, window.aheadPieces(mb / 4))
     }
 
     @Test

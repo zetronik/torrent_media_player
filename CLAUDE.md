@@ -51,7 +51,7 @@ Single activity (`MainActivity`) with Compose for TV (`androidx.tv:tv-material`)
 - Playback path: `TorrentUris` (`torrent://<infohash>/<fileIndex>`) → `player/TorrentDataSource` (Media3 `BaseDataSource`) → `TorrentReader`.
   - `TorrentReader` blocks the loader thread in `ActiveTorrent.awaitPiece()` until the piece arrives (via `PieceFinishedAlert`, with a polling fallback). ExoPlayer cancels loads by interrupting the thread, so the wait must stay interruptible.
 - **The cache is a bounded ring, not a full download.** TV boxes have a few hundred MB free, while files can be 60+ GB.
-  - `StreamBudget.forStream` sizes it from the file, not the disk: about 5 min of video at a bitrate estimated as file size / 90 min, clamped to 128 MB–1.5 GB. It is further capped at 60% of free space minus a 256 MB reserve. Below `minimumFreeBytes`, `prepareStream` throws `INSUFFICIENT_SPACE`.
+  - `StreamBudget.forStream` sizes it from the file, not the disk: about 5 min of video at a bitrate estimated as file size / 90 min, clamped to 128 MB–1.5 GB ("Auto"). A fixed size chosen in the settings (`AppSettings.torrentCacheMb`, read by the engine through its `cacheLimitBytes` lambda when a stream is prepared) replaces that and is not limited to 10 min ahead (`timeCapped = false`). Either way it is capped by `spaceCap`: 60% of free space minus a 256 MB reserve. Below `minimumFreeBytes`, `prepareStream` throws `INSUFFICIENT_SPACE`.
   - `StreamWindow` is pure piece arithmetic and is unit-tested.
   - `StreamPrioritizer` (one per played file, held by `ActiveTorrent.stream`):
     - Only the read-ahead window has non-zero piece priority. The window is sized by the budget, and by the bitrate (at most 10 min ahead) once the player reports it via `engine.setBitrate`.
@@ -95,6 +95,13 @@ Single activity (`MainActivity`) with Compose for TV (`androidx.tv:tv-material`)
 - Recent list management: toolbar refresh/clear, per-item actions via long press or the remote Menu key (`OptionsDialog`). Seed/peer refresh uses `TrackerScraper`: its own UDP (BEP 15) and HTTP scrape client, independent of the single-torrent libtorrent session, one batched request per tracker. Trackers come from each magnet `tr=` plus `PublicTrackers`.
 - Playback positions are saved in Room (`PlaybackPosition`, key `<infohash>:<index>` or the file/content URI). Torrent positions live as long as the torrent is in the recent list (`RecentRepository.remove` deletes them).
   - Opening a torrent file that has a position asks "Continue from …" / "Start over" (`TorrentScreen`). "Start over" passes `PlayerRoute.startPositionMs = 0`, which overrides the saved one. Switching files inside the player, local files and casts still resume silently.
+
+### Settings (`data/AppSettings.kt`, `ui/settings/`)
+
+- `SettingsRoute` opens from the gear at the end of `HomeTabBar` (both tabs; `HomeBar` carries the tab switch and the callback) and from the player's top bar, which pauses playback first.
+- `AppSettings` (SharedPreferences `settings`) holds app settings; look-and-feel stays in `UiPreferences`.
+- A menu of `SettingsSection`s under `SettingsGroup` headers (Audio, Video, Torrent; an empty group shows "nothing yet"). TV and landscape windows: a narrow menu with a preview of the focused section beside it; → or OK opens the section full width with the menu hidden, ← or Back returns to the menu. Portrait phones and tablets: the menu is a page, a section opens as another page and Back returns. A new section is an enum entry plus branches in `SectionContent` and `sectionSummary`.
+- "Torrent cache" (`TorrentCacheSettings`): the cache partition's free/total space (`TorrentEngine.storageSpace`, refreshed every 3 s), a warning when the fixed size exceeds `spaceCap`, options with a checkmark, and a table of minutes in the cache for 5/20/50 GB files of 1 h/2 h (`CacheEstimate`, pure, unit-tested). Opened full width in landscape (`SectionContent(wide = true)`) it has two columns: the options on the left, the rest on the right with no focus needed. In one column (preview, portrait) the storage and table cards are focusable (`infoCard`), otherwise a remote could not scroll to them.
 
 ### Play on TV (`remote/`, `ui/remote/`)
 

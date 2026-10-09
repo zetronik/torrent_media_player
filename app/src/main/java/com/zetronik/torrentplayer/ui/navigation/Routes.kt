@@ -39,6 +39,10 @@ data class PlayerRoute(
     val startDurationMs: Long = 0,
 )
 
+/** Settings; opened from the start screen and from the player. */
+@Serializable
+data object SettingsRoute
+
 /** The phone as a remote for a TV that plays a torrent sent from here. */
 @Serializable
 data class RemoteRoute(val deviceId: String, val deviceName: String, val host: String, val port: Int)

@@ -3,8 +3,10 @@ package com.zetronik.torrentplayer.torrent
 /**
  * How much disk the stream may use. The cache is a ring: [aheadBytes] are downloaded in front of the
  * read position, [behindBytes] are kept behind it for short seeks back, everything older is freed.
+ * [timeCapped] limits the read-ahead to [StreamWindow]'s ten minutes of video; a size the user chose
+ * in the settings is used in full instead.
  */
-data class StreamBudget(val aheadBytes: Long, val behindBytes: Long) {
+data class StreamBudget(val aheadBytes: Long, val behindBytes: Long, val timeCapped: Boolean = true) {
     val totalBytes: Long get() = aheadBytes + behindBytes
 
     companion object {
@@ -21,19 +23,30 @@ data class StreamBudget(val aheadBytes: Long, val behindBytes: Long) {
         private const val MIN_CACHE = 128 * MB
         private const val MAX_CACHE = 1536 * MB
 
+        /** [forStream]'s `limitBytes` for the automatic size. */
+        const val AUTO = 0L
+
         /**
-         * Budget for streaming a file of [fileSize] bytes: a few minutes of video, not a share of the disk.
-         * It is further limited by [freeBytes]. Returns `null` when there is not enough room to stream at all.
+         * Budget for streaming a file of [fileSize] bytes. [limitBytes] is the size chosen in the settings;
+         * with [AUTO] it is a few minutes of video, not a share of the disk. Either way it is further limited
+         * by [freeBytes] (see [spaceCap]). Returns `null` when there is not enough room to stream at all.
          */
-        fun forStream(fileSize: Long, freeBytes: Long): StreamBudget? {
-            val spaceCap = minOf(freeBytes * 6 / 10, freeBytes - RESERVE)
+        fun forStream(fileSize: Long, freeBytes: Long, limitBytes: Long = AUTO): StreamBudget? {
+            val spaceCap = spaceCap(freeBytes)
             if (spaceCap < MIN_TOTAL) return null
-            val estimatedBitrate = fileSize / ASSUMED_DURATION_SECONDS
-            val wanted = (estimatedBitrate * CACHE_SECONDS).coerceIn(MIN_CACHE, MAX_CACHE)
+            val wanted = if (limitBytes > AUTO) {
+                limitBytes
+            } else {
+                val estimatedBitrate = fileSize / ASSUMED_DURATION_SECONDS
+                (estimatedBitrate * CACHE_SECONDS).coerceIn(MIN_CACHE, MAX_CACHE)
+            }
             val total = minOf(wanted, spaceCap)
             val behind = minOf(total * 15 / 100, MAX_BEHIND)
-            return StreamBudget(aheadBytes = total - behind, behindBytes = behind)
+            return StreamBudget(aheadBytes = total - behind, behindBytes = behind, timeCapped = limitBytes <= AUTO)
         }
+
+        /** The most the cache may take with [freeBytes] free: 60% of it, keeping the low-storage reserve. */
+        fun spaceCap(freeBytes: Long): Long = minOf(freeBytes * 6 / 10, freeBytes - RESERVE)
 
         /** Free space needed before playback can start; shown to the user when it is missing. */
         val minimumFreeBytes: Long = maxOf(MIN_TOTAL * 10 / 6, MIN_TOTAL + RESERVE)
@@ -80,7 +93,7 @@ class StreamWindow(
 ) {
     fun aheadPieces(bitrate: Long): Int {
         var bytes = budget.aheadBytes
-        if (bitrate > 0) bytes = minOf(bytes, bitrate * MAX_AHEAD_SECONDS)
+        if (bitrate > 0 && budget.timeCapped) bytes = minOf(bytes, bitrate * MAX_AHEAD_SECONDS)
         return maxOf(MIN_AHEAD_PIECES, (bytes / pieceLength).toInt())
     }
 

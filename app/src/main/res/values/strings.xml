@@ -114,6 +114,28 @@
     <string name="player_rewind">Назад на 10 секунд</string>
     <string name="player_forward">Вперёд на 10 секунд</string>
 
+    <!-- Settings -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_group_audio">Аудио</string>
+    <string name="settings_group_video">Видео</string>
+    <string name="settings_group_torrent">Торрент</string>
+    <string name="settings_group_empty">Пока нет настроек</string>
+    <string name="settings_cache_section">Торрент-буфер</string>
+    <string name="settings_cache_auto">Авто</string>
+    <string name="settings_cache_auto_details">Около 5 минут видео, от 128 МБ до 1,5 ГБ</string>
+    <string name="settings_cache_footer">Место на накопителе под видео из торрента: впереди текущей позиции и немного позади неё. Новый размер применяется со следующего запуска видео.</string>
+    <string name="settings_storage_title">Накопитель</string>
+    <string name="settings_storage_free">Свободно %1$s из %2$s</string>
+    <string name="settings_storage_cache_cap">Под буфер можно занять до %1$s</string>
+    <string name="settings_cache_limited">Не хватает свободного места: буфер будет уменьшен до %1$s. Под буфер берётся не больше 60%% свободного места, и 256 МБ всегда остаются свободными.</string>
+    <string name="settings_cache_no_space">Слишком мало свободного места для просмотра торрентов: нужно не меньше %1$s.</string>
+    <string name="settings_estimate_title">Сколько видео помещается в буфер</string>
+    <string name="settings_estimate_file">Файл</string>
+    <string name="settings_estimate_cache">Буфер</string>
+    <string name="settings_estimate_hours">%1$d ч</string>
+    <string name="settings_estimate_minutes">%1$s мин</string>
+    <string name="settings_estimate_footer">Битрейт считается как размер файла, делённый на длительность. Около 15% буфера (до 256 МБ) остаётся позади позиции для перемотки назад.</string>
+
     <!-- Templates -->
     <string name="template_ios">iOS</string>
     <string name="template_classic">Классический</string>

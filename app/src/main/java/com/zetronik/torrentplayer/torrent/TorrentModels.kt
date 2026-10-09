@@ -69,6 +69,9 @@ data class TorrentStats(
     }
 }
 
+/** Space on the partition that holds the stream cache. */
+data class StorageSpace(val freeBytes: Long, val totalBytes: Long)
+
 /** `torrent://<infohash>/<fileIndex>` — the URI the player uses for files streamed from a torrent. */
 object TorrentUris {
     const val SCHEME = "torrent"

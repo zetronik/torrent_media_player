@@ -22,6 +22,7 @@ import com.zetronik.torrentplayer.ui.files.PickerScreen
 import com.zetronik.torrentplayer.ui.home.HomeScreen
 import com.zetronik.torrentplayer.ui.player.PlayerScreen
 import com.zetronik.torrentplayer.ui.remote.RemoteScreen
+import com.zetronik.torrentplayer.ui.settings.SettingsScreen
 import com.zetronik.torrentplayer.ui.torrent.TorrentScreen
 import kotlinx.coroutines.flow.Flow
 
@@ -94,7 +95,11 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
                 onOpenFolder = { navController.navigate(it) },
                 onPick = { navController.navigate(it) },
                 onPlay = { navController.navigate(it) },
+                onOpenSettings = { navController.navigate(SettingsRoute) { launchSingleTop = true } },
             )
+        }
+        composable<SettingsRoute> {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
         composable<PickerRoute> {
             PickerScreen(onClose = { navController.popBackStack() })
@@ -131,6 +136,7 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
                 onCast = { remote ->
                     navController.navigate(remote) { popUpTo<PlayerRoute> { inclusive = true } }
                 },
+                onOpenSettings = { navController.navigate(SettingsRoute) { launchSingleTop = true } },
             )
         }
         composable<RemoteRoute> {

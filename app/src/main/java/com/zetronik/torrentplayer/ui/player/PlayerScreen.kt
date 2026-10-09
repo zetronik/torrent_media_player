@@ -126,7 +126,7 @@ private const val SCALE_HINT_MS = 1_500L
  * Touch: tap toggles controls, double tap on the left/right half seeks by 10 s.
  */
 @Composable
-fun PlayerScreen(onExit: () -> Unit, onCast: (RemoteRoute) -> Unit) {
+fun PlayerScreen(onExit: () -> Unit, onCast: (RemoteRoute) -> Unit, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val viewModel: PlayerViewModel = viewModel {
@@ -293,6 +293,10 @@ fun PlayerScreen(onExit: () -> Unit, onCast: (RemoteRoute) -> Unit) {
                 playFocus = playFocus,
                 seekFocus = seekFocus,
                 onOpenDialog = { dialog = it },
+                onOpenSettings = {
+                    viewModel.pause()
+                    onOpenSettings()
+                },
                 onInteraction = { interactions++ },
                 onSeekBarPositioned = { seekBarTop = it },
                 onCycleScale = {
@@ -425,6 +429,7 @@ private fun Controls(
     playFocus: FocusRequester,
     seekFocus: FocusRequester,
     onOpenDialog: (PlayerDialog) -> Unit,
+    onOpenSettings: () -> Unit,
     onInteraction: () -> Unit,
     onSeekBarPositioned: (top: Float) -> Unit,
     onCycleScale: () -> Unit,
@@ -482,6 +487,7 @@ private fun Controls(
                     onOpenDialog(PlayerDialog.Cast)
                 }
             }
+            TopBarButton(R.drawable.ic_settings, stringResource(R.string.settings_title), onOpenSettings)
         }
     }
 
@@ -668,7 +674,7 @@ private fun ScaleHint(scale: VideoScale, modifier: Modifier) {
     )
 }
 
-/** Icon-only button on a transparent background: close, audio, subtitles, playlist, scale. */
+/** Icon-only button on a transparent background: close, audio, subtitles, playlist, cast, settings, scale. */
 @Composable
 private fun TopBarButton(icon: Int, label: String, onClick: () -> Unit) {
     val size = if (LocalIsTv.current) 52.dp else TouchTarget

@@ -63,12 +63,13 @@ import com.zetronik.torrentplayer.ui.common.listItemSpacing
 import com.zetronik.torrentplayer.ui.common.rememberItemFocusRequester
 import com.zetronik.torrentplayer.ui.common.requestFocusSafely
 import com.zetronik.torrentplayer.ui.common.toast
+import com.zetronik.torrentplayer.ui.home.HomeBar
 import com.zetronik.torrentplayer.ui.home.HomeTabBar
 import com.zetronik.torrentplayer.ui.theme.AppTheme
 
 /** The start screen's "Torrents" tab: recently opened torrents. */
 @Composable
-fun RecentTab(tabs: @Composable () -> Unit, onOpenTorrent: (source: String) -> Unit, modifier: Modifier = Modifier) {
+fun RecentTab(tabs: HomeBar, onOpenTorrent: (source: String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val viewModel: RecentViewModel = viewModel { RecentViewModel(context.appContainer.recentRepository) }
@@ -129,7 +130,7 @@ fun RecentTab(tabs: @Composable () -> Unit, onOpenTorrent: (source: String) -> U
 }
 
 @Composable
-private fun EmptyState(tabs: @Composable () -> Unit, onPaste: () -> Unit, modifier: Modifier) {
+private fun EmptyState(tabs: HomeBar, onPaste: () -> Unit, modifier: Modifier) {
     val focus = remember { FocusRequester() }
     Column(modifier) {
         HomeTabBar(tabs)
@@ -164,7 +165,7 @@ private fun EmptyState(tabs: @Composable () -> Unit, onPaste: () -> Unit, modifi
 
 @Composable
 private fun RecentList(
-    tabs: @Composable () -> Unit,
+    tabs: HomeBar,
     modifier: Modifier,
     items: List<RecentTorrent>,
     refreshing: Boolean,

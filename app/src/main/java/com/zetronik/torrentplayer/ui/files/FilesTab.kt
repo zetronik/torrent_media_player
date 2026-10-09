@@ -60,6 +60,7 @@ import com.zetronik.torrentplayer.ui.common.listItemSpacing
 import com.zetronik.torrentplayer.ui.common.rememberItemFocusRequester
 import com.zetronik.torrentplayer.ui.common.requestFocusSafely
 import com.zetronik.torrentplayer.ui.common.toast
+import com.zetronik.torrentplayer.ui.home.HomeBar
 import com.zetronik.torrentplayer.ui.home.HomeTabBar
 import com.zetronik.torrentplayer.ui.navigation.FolderRoute
 import com.zetronik.torrentplayer.ui.navigation.PickerRoute
@@ -75,7 +76,7 @@ private const val ADD_FILE_KEY = "add_file"
  */
 @Composable
 fun FilesTab(
-    tabs: @Composable () -> Unit,
+    tabs: HomeBar,
     onPick: (PickerRoute) -> Unit,
     onOpenFolder: (FolderRoute) -> Unit,
     onPlay: (PlayerRoute) -> Unit,

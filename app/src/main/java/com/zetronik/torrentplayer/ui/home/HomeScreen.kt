@@ -30,6 +30,8 @@ import androidx.tv.material3.Text
 import com.zetronik.torrentplayer.R
 import com.zetronik.torrentplayer.appContainer
 import com.zetronik.torrentplayer.ui.common.AppButton
+import com.zetronik.torrentplayer.ui.common.AppIconButton
+import com.zetronik.torrentplayer.ui.common.TouchTarget
 import com.zetronik.torrentplayer.ui.common.appButtonColors
 import com.zetronik.torrentplayer.ui.common.appSecondaryButtonColors
 import com.zetronik.torrentplayer.ui.common.readableWidth
@@ -49,6 +51,7 @@ fun HomeScreen(
     onOpenFolder: (FolderRoute) -> Unit,
     onPick: (PickerRoute) -> Unit,
     onPlay: (PlayerRoute) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val preferences = LocalContext.current.appContainer.uiPreferences
     val tab by preferences.homeTab.collectAsStateWithLifecycle()
@@ -67,7 +70,10 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Each tab places the switch in its own top bar, next to its actions.
-            val tabs: @Composable () -> Unit = { TabSwitch(selected = tab, onSelect = preferences::setHomeTab) }
+            val tabs = HomeBar(
+                tabs = { TabSwitch(selected = tab, onSelect = preferences::setHomeTab) },
+                onOpenSettings = onOpenSettings,
+            )
             val content = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -79,23 +85,28 @@ fun HomeScreen(
     }
 }
 
+/** What every tab's [HomeTabBar] shows besides the tab's own actions: the tab switch and the settings button. */
+class HomeBar(val tabs: @Composable () -> Unit, val onOpenSettings: () -> Unit)
+
 /**
- * The start screen's top bar instead of a title: the tab switch, then the tab's [actions] at the end of the
- * same line. On a phone in portrait the actions move to a line of their own.
+ * The start screen's top bar instead of a title: the tab switch, then the tab's [actions] and the settings
+ * button at the end of the same line. On a phone in portrait the actions move to a line of their own.
  */
 @Composable
-fun HomeTabBar(tabs: @Composable () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
+fun HomeTabBar(bar: HomeBar, actions: @Composable RowScope.() -> Unit = {}) {
     val layout = AppTheme.layout
     val spacing = if (layout.isTv) 20.dp else 12.dp
     if (layout.isCompact) {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { tabs() }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { bar.tabs() }
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
-                content = actions,
-            )
+            ) {
+                actions()
+                SettingsButton(bar.onOpenSettings)
+            }
         }
     } else {
         Row(
@@ -103,10 +114,31 @@ fun HomeTabBar(tabs: @Composable () -> Unit, actions: @Composable RowScope.() ->
             horizontalArrangement = Arrangement.spacedBy(spacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            tabs()
-            Spacer(Modifier.weight(1f))
-            actions()
+            bar.tabs()
+            // A row of its own, so its weighted buttons share only the space left of the switch.
+            Row(
+                Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                actions()
+                SettingsButton(bar.onOpenSettings)
+            }
         }
+    }
+}
+
+/** A gear without a label everywhere: it is universally understood and keeps the bar short. */
+@Composable
+private fun SettingsButton(onClick: () -> Unit) {
+    AppIconButton(onClick = onClick, modifier = Modifier.size(TouchTarget)) {
+        Icon(
+            painterResource(R.drawable.ic_settings),
+            contentDescription = stringResource(R.string.settings_title),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(22.dp),
+        )
     }
 }
 

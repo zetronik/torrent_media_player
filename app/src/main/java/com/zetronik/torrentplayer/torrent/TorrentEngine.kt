@@ -58,8 +58,11 @@ class TorrentException(
  *
  * Structural operations (add / reset / close / prepare) are serialized with [mutex]; reads from the player
  * go straight to [ActiveTorrent] without touching it.
+ *
+ * [cacheLimitBytes] is the stream cache size chosen in the settings, [StreamBudget.AUTO] for automatic;
+ * it is read when a stream is prepared.
  */
-class TorrentEngine(context: Context) {
+class TorrentEngine(context: Context, private val cacheLimitBytes: () -> Long = { StreamBudget.AUTO }) {
 
     private val session = SessionManager(false)
     // Not in cacheDir: on low storage Android wipes app caches, which would pull files out from under
@@ -179,7 +182,7 @@ class TorrentEngine(context: Context) {
 
     /**
      * Starts streaming [fileIndex] (plus its [extraFiles], e.g. subtitles, at top priority) from
-     * [startPosition], with a ring cache sized from the free disk space.
+     * [startPosition], with a ring cache sized by the settings and limited by the free disk space.
      *
      * @throws TorrentException with [TorrentException.Reason.INSUFFICIENT_SPACE] when the device is too full.
      */
@@ -196,7 +199,7 @@ class TorrentEngine(context: Context) {
             // would make Android wipe them to make room for a temporary stream cache.
             @SuppressLint("UsableSpace")
             val free = dataRoot.usableSpace
-            val budget = StreamBudget.forStream(info.files().fileSize(fileIndex), free)
+            val budget = StreamBudget.forStream(info.files().fileSize(fileIndex), free, cacheLimitBytes())
                 ?: throw TorrentException(TorrentException.Reason.INSUFFICIENT_SPACE, freeBytes = free)
             Log.i(TAG, "Stream budget: ahead ${budget.aheadBytes shr 20} MB, behind ${budget.behindBytes shr 20} MB")
             val config = StreamConfig(fileIndex, extraFiles, budget)
@@ -204,6 +207,14 @@ class TorrentEngine(context: Context) {
             applyStream(torrent, config, startPosition, exactStart = false)
             startMonitor(infoHash, config)
         }
+    }
+
+    /** Free and total space of the partition the stream cache lives on, for the settings screen. */
+    fun storageSpace(): StorageSpace {
+        val dir = dataRoot.parentFile ?: dataRoot
+        @SuppressLint("UsableSpace")
+        val free = dir.usableSpace
+        return StorageSpace(freeBytes = free, totalBytes = dir.totalSpace)
     }
 
     /** Media bitrate reported by the player; sizes the read-ahead window in time rather than bytes. */

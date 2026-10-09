@@ -3,6 +3,7 @@ package com.zetronik.torrentplayer
 import android.content.Context
 import android.util.Log
 import com.zetronik.torrentplayer.data.AppDatabase
+import com.zetronik.torrentplayer.data.AppSettings
 import com.zetronik.torrentplayer.data.PlaybackPositionRepository
 import com.zetronik.torrentplayer.data.RecentRepository
 import com.zetronik.torrentplayer.media.LocalFiles
@@ -30,7 +31,10 @@ class AppContainer(context: Context) {
             CoroutineExceptionHandler { _, e -> Log.e("AppContainer", "Background task failed", e) }
     )
 
-    val torrentEngine = TorrentEngine(context)
+    /** Settings screen values; the engine reads the stream cache size from here. */
+    val settings = AppSettings(context)
+
+    val torrentEngine = TorrentEngine(context) { settings.torrentCacheBytes }
     private val database = AppDatabase.build(context)
     val recentRepository = RecentRepository(database, torrentEngine)
     val positionRepository = PlaybackPositionRepository(database)
