@@ -6,6 +6,7 @@ import android.net.nsd.NsdServiceInfo
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.edit
+import com.zetronik.torrentplayer.player.StreamUris
 import com.zetronik.torrentplayer.torrent.TorrentEngine
 import com.zetronik.torrentplayer.torrent.TorrentInput
 import com.zetronik.torrentplayer.torrent.TorrentUris
@@ -130,7 +131,7 @@ class RemoteReceiver(
             socket.soTimeout = READ_TIMEOUT_MS
             val line = RemoteProtocol.readLine(BufferedInputStream(socket.getInputStream()))
             val response = try {
-                handle(RemoteProtocol.json.decodeFromString<RemoteRequest>(line))
+                handle(RemoteProtocol.json.decodeFromString<RemoteRequest>(line), socket.inetAddress.hostAddress)
             } catch (e: IllegalArgumentException) {
                 Log.w(TAG, "Bad request", e)
                 failure(RemoteError.BAD_REQUEST)
@@ -141,14 +142,19 @@ class RemoteReceiver(
         }
     }
 
-    private suspend fun handle(request: RemoteRequest): RemoteResponse {
+    /** [peer] is the phone's address: a streamed video is read back from it. */
+    private suspend fun handle(request: RemoteRequest, peer: String?): RemoteResponse {
         when (request.type) {
             RequestType.PAIR_START -> return startPairing(request.client.orEmpty())
             RequestType.PAIR_CONFIRM -> return confirmPairing(request.code.orEmpty())
         }
         if (!isPaired(request.token)) return failure(RemoteError.UNAUTHORIZED)
         return when (request.type) {
-            RequestType.PLAY -> request.play?.let { play(it) } ?: failure(RemoteError.BAD_REQUEST)
+            RequestType.PLAY -> {
+                val play = request.play ?: return failure(RemoteError.BAD_REQUEST)
+                val stream = play.stream
+                if (stream != null) playStream(play, stream, peer) else play(play)
+            }
             RequestType.STATUS -> {
                 val status = withContext(Dispatchers.Main) { session.playback?.status() }
                 RemoteResponse(ok = true, status = status ?: RemoteStatus(active = false))
@@ -190,6 +196,27 @@ class RemoteReceiver(
         withContext(Dispatchers.Main) {
             navigate(NavRequest.PlayTorrent(TorrentInput.Magnet(magnet).source, route, torrentActive))
         }
+        return RemoteResponse(ok = true)
+    }
+
+    /** Local videos of the phone: played straight from its stream server, nothing is downloaded first. */
+    private suspend fun playStream(request: PlayRequest, stream: StreamOffer, peer: String?): RemoteResponse {
+        val host = peer ?: return failure(RemoteError.BAD_REQUEST)
+        if (stream.items.isEmpty() || stream.index !in stream.items.indices) return failure(RemoteError.BAD_REQUEST)
+        val navigate = navigate ?: return failure(RemoteError.FAILED)
+        val uris = stream.items.mapIndexed { i, item ->
+            item.url ?: StreamUris.build(host, stream.port, i, stream.secret).toString()
+        }
+        val titles = stream.items.map { it.title }
+        val route = PlayerRoute(
+            uri = uris[stream.index],
+            title = titles[stream.index],
+            playlistUris = if (uris.size > 1) uris else emptyList(),
+            playlistTitles = if (uris.size > 1) titles else emptyList(),
+            startPositionMs = request.positionMs,
+            startDurationMs = request.durationMs,
+        )
+        withContext(Dispatchers.Main) { navigate(NavRequest.PlayStream(route)) }
         return RemoteResponse(ok = true)
     }
 

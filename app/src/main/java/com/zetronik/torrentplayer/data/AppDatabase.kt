@@ -63,6 +63,9 @@ interface PlaybackPositionDao {
     @Query("SELECT * FROM playback_positions WHERE `key` LIKE :infoHash || ':%'")
     fun observeForTorrent(infoHash: String): Flow<List<PlaybackPosition>>
 
+    @Query("SELECT * FROM playback_positions WHERE `key` IN (:keys)")
+    fun observe(keys: List<String>): Flow<List<PlaybackPosition>>
+
     @Upsert
     suspend fun upsert(position: PlaybackPosition)
 

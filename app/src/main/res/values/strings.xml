@@ -1,9 +1,32 @@
 <resources>
     <string name="app_name">Torrent Player</string>
 
+    <!-- Start screen -->
+    <string name="home_tab_files">Файлы</string>
+    <string name="home_tab_torrents">Торренты</string>
+
+    <!-- Local files -->
+    <string name="files_add_file">Добавить файл</string>
+    <string name="files_add_folder">Добавить папку</string>
+    <string name="files_library_empty">Здесь появятся видео, плейлисты и папки, которые вы добавите</string>
+    <string name="files_entry_missing">Недоступно</string>
+    <string name="files_entry_unavailable">Файл недоступен: накопитель отключён или файл удалён</string>
+    <string name="files_remove_entry">Убрать из списка</string>
+    <string name="picker_file_title">Выберите файл</string>
+    <string name="picker_folder_title">Выберите папку</string>
+    <string name="picker_choose_folder">Выбрать эту папку</string>
+    <string name="picker_no_subfolders">Вложенных папок нет</string>
+    <string name="files_grant_access">Разрешить доступ к видео</string>
+    <string name="files_grant_access_hint">Чтобы показать папки, видео и плейлисты на устройстве и USB-накопителях</string>
+    <string name="files_grant_access_denied">Доступ запрещён. Нажмите, чтобы открыть настройки приложения</string>
+    <string name="files_volume_space">Свободно %1$s из %2$s</string>
+    <string name="files_folder_empty">В этой папке нет видео и плейлистов</string>
+    <string name="files_folder_unavailable">Папка недоступна: накопитель отключён или доступ отозван</string>
+    <string name="files_playlist">Плейлист</string>
+    <string name="files_playlist_empty">В плейлисте не найдено доступных видео</string>
+
     <!-- Recent torrents -->
     <string name="paste_from_clipboard">Вставить из буфера</string>
-    <string name="recent_title">Недавние торренты</string>
     <string name="recent_empty_hint">Скопируйте magnet-ссылку, ссылку на .torrent-файл или хеш торрента и нажмите кнопку</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>
     <string name="clipboard_no_torrent">В буфере обмена нет magnet-ссылки, ссылки на .torrent или хеша</string>
@@ -25,6 +48,8 @@
     <string name="torrent_metadata_progress">Пиры: %1$d · DHT-узлы: %2$d</string>
     <string name="torrent_swarm">Сиды: %1$d · пиры: %2$d</string>
     <string name="torrent_no_video">В торренте нет видеофайлов</string>
+    <string name="torrent_resume_continue">Продолжить просмотр с %1$s</string>
+    <string name="torrent_resume_restart">Начать заново</string>
     <string name="torrent_resume_at">Остановились на %1$s из %2$s</string>
     <string name="error_invalid_input">Не удалось распознать ссылку на торрент</string>
     <string name="error_download_failed">Не удалось скачать .torrent-файл</string>
@@ -81,6 +106,10 @@
     <string name="remote_tv_error">Ошибка на телевизоре: %1$s</string>
     <string name="remote_continue_here">Смотреть на телефоне</string>
     <string name="remote_stop">Остановить на ТВ</string>
+    <string name="stream_channel">Передача видео на телевизор</string>
+    <string name="stream_notification_title">Видео передаётся на телевизор</string>
+    <string name="stream_notification_text">Телефон отдаёт файл, пока идёт просмотр</string>
+    <string name="stream_stop">Остановить</string>
     <string name="back">Назад</string>
     <string name="player_rewind">Назад на 10 секунд</string>
     <string name="player_forward">Вперёд на 10 секунд</string>

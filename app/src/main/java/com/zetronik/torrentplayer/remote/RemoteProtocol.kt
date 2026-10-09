@@ -74,18 +74,44 @@ data class RemoteRequest(
     val command: RemoteCommand? = null,
 )
 
-/** Start playing a torrent file on the TV. */
+/**
+ * Start playing on the TV: a torrent file ([infoHash], [fileIndex], [magnet]), or local videos the phone
+ * streams itself ([stream]).
+ */
 @Serializable
 data class PlayRequest(
-    val infoHash: String,
-    val fileIndex: Int,
+    val infoHash: String = "",
+    val fileIndex: Int = -1,
     val title: String,
     val positionMs: Long,
     val durationMs: Long,
-    val magnet: String,
+    val magnet: String = "",
     /** The `.torrent` file in base64, so the TV does not have to fetch the metadata from peers. */
     val torrent: String? = null,
+    val stream: StreamOffer? = null,
 )
+
+/**
+ * Local videos served by the phone ([com.zetronik.torrentplayer.remote.LocalStreamServer]) on [port] of
+ * the address the request came from. [secret] authorizes reads; [index] is the item to start with.
+ */
+@Serializable
+data class StreamOffer(val port: Int, val secret: String, val items: List<StreamItem>, val index: Int)
+
+/** [url] is set for playlist entries the TV can open itself (http/https); everything else is streamed. */
+@Serializable
+data class StreamItem(val title: String, val size: Long, val url: String? = null)
+
+/**
+ * The phone's stream server: one connection per read. The TV sends one JSON line [StreamRead], the phone
+ * answers with one JSON line [StreamHeader] followed by the raw bytes from [StreamRead.offset] to the end
+ * of the file; the TV closes the connection when it has read enough (a seek opens a new one).
+ */
+@Serializable
+data class StreamRead(val secret: String, val item: Int, val offset: Long)
+
+@Serializable
+data class StreamHeader(val ok: Boolean, val size: Long = 0, val error: String? = null)
 
 @Serializable
 data class RemoteCommand(val action: String, val value: Long = 0)

@@ -21,7 +21,9 @@ import androidx.navigation.toRoute
 import com.zetronik.torrentplayer.AppContainer
 import com.zetronik.torrentplayer.data.PlaybackPositionRepository
 import com.zetronik.torrentplayer.player.PlayerFactory
+import com.zetronik.torrentplayer.player.StreamUris
 import com.zetronik.torrentplayer.remote.PlayRequest
+import com.zetronik.torrentplayer.remote.LocalStreamServer
 import com.zetronik.torrentplayer.remote.RemoteAction
 import com.zetronik.torrentplayer.remote.RemoteCommand
 import com.zetronik.torrentplayer.remote.RemotePlayback
@@ -197,12 +199,16 @@ class PlayerViewModel(
 
     private fun currentItem(): PlaylistItem = _ui.value.let { it.playlist[it.currentIndex] }
 
-    private fun positionKey(item: PlaylistItem): String =
-        if (isTorrent) PlaybackPositionRepository.torrentKey(checkNotNull(route.infoHash), item.fileIndex) else item.uri
+    /** Null for a phone's stream: its URI changes with every cast, and the phone keeps its own position. */
+    private fun positionKey(item: PlaylistItem): String? = when {
+        isTorrent -> PlaybackPositionRepository.torrentKey(checkNotNull(route.infoHash), item.fileIndex)
+        item.uri.startsWith("${StreamUris.SCHEME}:") -> null
+        else -> item.uri
+    }
 
     /** [startOverrideMs] replaces the saved position; [durationHintMs] is the duration it was measured against. */
     private suspend fun prepare(item: PlaylistItem, startOverrideMs: Long? = null, durationHintMs: Long = 0) {
-        val saved = container.positionRepository.get(positionKey(item))
+        val saved = positionKey(item)?.let { container.positionRepository.get(it) }
         val startMs = startOverrideMs ?: saved?.positionMs ?: 0L
         val durationMs = if (startOverrideMs != null && durationHintMs > 0) durationHintMs else saved?.durationMs ?: 0L
         val mediaItem = try {
@@ -343,12 +349,23 @@ class PlayerViewModel(
         }
     }
 
-    /** What the TV needs to continue this torrent from the current position; null for a local video. */
+    /**
+     * What the TV needs to continue from the current position. A torrent is downloaded by the TV itself;
+     * local videos (with the rest of the playlist) are streamed from this phone.
+     */
     suspend fun castRequest(): PlayRequest? {
-        val infoHash = route.infoHash ?: return null
         val item = currentItem()
         val positionMs = _ui.value.pendingSeekMs ?: player.currentPosition
         val durationMs = player.duration.coerceAtLeast(0)
+        val infoHash = route.infoHash ?: return withContext(Dispatchers.IO) {
+            val sources = _ui.value.playlist.map { LocalStreamServer.Source(it.uri, it.title) }
+            PlayRequest(
+                title = item.title,
+                positionMs = positionMs,
+                durationMs = durationMs,
+                stream = container.localStreamServer.offer(sources, _ui.value.currentIndex),
+            )
+        }
         val meta = engine.awaitMetadata(infoHash)
         val torrent = withContext(Dispatchers.IO) {
             engine.metadataFile(infoHash).takeIf { it.exists() }?.readBytes()
@@ -460,7 +477,7 @@ class PlayerViewModel(
         val position = player.currentPosition
         val duration = player.duration
         if (_ui.value.preparing || duration == C.TIME_UNSET) return
-        val key = positionKey(currentItem())
+        val key = positionKey(currentItem()) ?: return
         container.appScope.launch { container.positionRepository.save(key, position, duration) }
     }
 

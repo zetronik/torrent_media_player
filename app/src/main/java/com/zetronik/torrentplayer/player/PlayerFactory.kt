@@ -5,7 +5,6 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -20,7 +19,7 @@ object PlayerFactory {
 
     fun create(context: Context, engine: TorrentEngine, forTorrent: Boolean): ExoPlayer {
         val dataSourceFactory: DataSource.Factory =
-            if (forTorrent) TorrentDataSource.Factory(engine) else DefaultDataSource.Factory(context)
+            if (forTorrent) TorrentDataSource.Factory(engine) else LocalDataSourceFactory(context)
 
         val extractors = DefaultExtractorsFactory()
             // Lets files without an index (some AVI/MPEG-TS rips) still be seekable.

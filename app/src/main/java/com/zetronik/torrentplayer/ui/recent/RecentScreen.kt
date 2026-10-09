@@ -3,19 +3,13 @@ package com.zetronik.torrentplayer.ui.recent
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -61,21 +55,20 @@ import com.zetronik.torrentplayer.ui.common.DisclosureIndicator
 import com.zetronik.torrentplayer.ui.common.IconBadge
 import com.zetronik.torrentplayer.ui.common.ItemPosition
 import com.zetronik.torrentplayer.ui.common.OptionsDialog
-import com.zetronik.torrentplayer.ui.common.ScreenHeader
 import com.zetronik.torrentplayer.ui.common.ToolbarAction
 import com.zetronik.torrentplayer.ui.common.formatDate
 import com.zetronik.torrentplayer.ui.common.formatSize
 import com.zetronik.torrentplayer.ui.common.isKeyboardNavigation
 import com.zetronik.torrentplayer.ui.common.listItemSpacing
-import com.zetronik.torrentplayer.ui.common.readableWidth
 import com.zetronik.torrentplayer.ui.common.rememberItemFocusRequester
 import com.zetronik.torrentplayer.ui.common.requestFocusSafely
 import com.zetronik.torrentplayer.ui.common.toast
+import com.zetronik.torrentplayer.ui.home.HomeTabBar
 import com.zetronik.torrentplayer.ui.theme.AppTheme
-import com.zetronik.torrentplayer.ui.theme.LocalScreenPadding
 
+/** The start screen's "Torrents" tab: recently opened torrents. */
 @Composable
-fun RecentScreen(onOpenTorrent: (source: String) -> Unit) {
+fun RecentTab(tabs: @Composable () -> Unit, onOpenTorrent: (source: String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val viewModel: RecentViewModel = viewModel { RecentViewModel(context.appContainer.recentRepository) }
@@ -103,32 +96,22 @@ fun RecentScreen(onOpenTorrent: (source: String) -> Unit) {
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(LocalScreenPadding.current),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        val current = items
-        val content = Modifier
-            .readableWidth()
-            .fillMaxSize()
-        when {
-            current == null -> Unit
-            current.isEmpty() -> EmptyState(onPaste = pasteFromClipboard, modifier = content)
-            else -> RecentList(
-                modifier = content,
-                items = current,
-                refreshing = refreshing,
-                onPaste = pasteFromClipboard,
-                onRefreshAll = viewModel::refreshAll,
-                onClearAll = { confirmClear = true },
-                onOpen = { onOpenTorrent(TorrentInput.Magnet(it.magnetUri).source) },
-                onRefresh = viewModel::refresh,
-                onDelete = { viewModel.delete(it.infoHash) },
-            )
-        }
+    val current = items
+    when {
+        current == null -> Unit
+        current.isEmpty() -> EmptyState(tabs = tabs, onPaste = pasteFromClipboard, modifier = modifier)
+        else -> RecentList(
+            tabs = tabs,
+            modifier = modifier,
+            items = current,
+            refreshing = refreshing,
+            onPaste = pasteFromClipboard,
+            onRefreshAll = viewModel::refreshAll,
+            onClearAll = { confirmClear = true },
+            onOpen = { onOpenTorrent(TorrentInput.Magnet(it.magnetUri).source) },
+            onRefresh = viewModel::refresh,
+            onDelete = { viewModel.delete(it.infoHash) },
+        )
     }
 
     if (confirmClear) {
@@ -146,10 +129,10 @@ fun RecentScreen(onOpenTorrent: (source: String) -> Unit) {
 }
 
 @Composable
-private fun EmptyState(onPaste: () -> Unit, modifier: Modifier) {
+private fun EmptyState(tabs: @Composable () -> Unit, onPaste: () -> Unit, modifier: Modifier) {
     val focus = remember { FocusRequester() }
     Column(modifier) {
-        ScreenHeader(stringResource(R.string.recent_title))
+        HomeTabBar(tabs)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -181,6 +164,7 @@ private fun EmptyState(onPaste: () -> Unit, modifier: Modifier) {
 
 @Composable
 private fun RecentList(
+    tabs: @Composable () -> Unit,
     modifier: Modifier,
     items: List<RecentTorrent>,
     refreshing: Boolean,
@@ -203,7 +187,7 @@ private fun RecentList(
     var pendingFocus by remember { mutableStateOf<String?>(null) }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        ScreenHeader(stringResource(R.string.recent_title)) {
+        HomeTabBar(tabs) {
             ToolbarAction(
                 R.drawable.ic_paste,
                 stringResource(R.string.paste_from_clipboard),

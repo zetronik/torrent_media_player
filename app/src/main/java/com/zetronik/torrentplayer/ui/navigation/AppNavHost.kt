@@ -17,8 +17,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.tv.material3.MaterialTheme
 import com.zetronik.torrentplayer.torrent.TorrentUris
+import com.zetronik.torrentplayer.ui.files.FolderScreen
+import com.zetronik.torrentplayer.ui.files.PickerScreen
+import com.zetronik.torrentplayer.ui.home.HomeScreen
 import com.zetronik.torrentplayer.ui.player.PlayerScreen
-import com.zetronik.torrentplayer.ui.recent.RecentScreen
 import com.zetronik.torrentplayer.ui.remote.RemoteScreen
 import com.zetronik.torrentplayer.ui.torrent.TorrentScreen
 import kotlinx.coroutines.flow.Flow
@@ -40,13 +42,17 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
                 // close the torrent the new player is about to stream.
                 val onItsFileList = request.torrentActive && navController.currentDestination?.hasRoute<TorrentRoute>() == true
                 if (!onItsFileList) {
-                    navController.navigate(TorrentRoute(request.source)) { popUpTo<RecentRoute>() }
+                    navController.navigate(TorrentRoute(request.source)) { popUpTo<HomeRoute>() }
                 }
                 navController.navigate(request.player)
                 return@collect
             }
+            if (request is NavRequest.PlayStream) {
+                navController.navigate(request.player) { popUpTo<HomeRoute>() }
+                return@collect
+            }
             val route: Any = when (request) {
-                is NavRequest.PlayTorrent -> return@collect
+                is NavRequest.PlayTorrent, is NavRequest.PlayStream -> return@collect
                 is NavRequest.OpenTorrent -> TorrentRoute(request.source)
                 is NavRequest.PlayVideo -> PlayerRoute(
                     uri = request.uri,
@@ -57,7 +63,7 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
                 )
             }
             navController.navigate(route) {
-                popUpTo<RecentRoute>()
+                popUpTo<HomeRoute>()
                 launchSingleTop = true
             }
         }
@@ -65,7 +71,7 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
 
     NavHost(
         navController = navController,
-        startDestination = RecentRoute,
+        startDestination = HomeRoute,
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
@@ -82,18 +88,34 @@ fun AppNavHost(navRequests: Flow<NavRequest>, onExitApp: () -> Unit) {
             if (initialState.destination.hasRoute<PlayerRoute>()) ExitTransition.None else fadeOut(tween(FADE_MS))
         },
     ) {
-        composable<RecentRoute> {
-            RecentScreen(onOpenTorrent = { source -> navController.navigate(TorrentRoute(source)) })
+        composable<HomeRoute> {
+            HomeScreen(
+                onOpenTorrent = { source -> navController.navigate(TorrentRoute(source)) },
+                onOpenFolder = { navController.navigate(it) },
+                onPick = { navController.navigate(it) },
+                onPlay = { navController.navigate(it) },
+            )
+        }
+        composable<PickerRoute> {
+            PickerScreen(onClose = { navController.popBackStack() })
+        }
+        composable<FolderRoute> {
+            FolderScreen(
+                onOpenFolder = { navController.navigate(it) },
+                onPlay = { navController.navigate(it) },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<TorrentRoute> {
             TorrentScreen(
-                onPlay = { meta, file ->
+                onPlay = { meta, file, startPositionMs ->
                     navController.navigate(
                         PlayerRoute(
                             uri = TorrentUris.build(meta.infoHash, file.index).toString(),
                             title = file.name,
                             infoHash = meta.infoHash,
                             fileIndex = file.index,
+                            startPositionMs = startPositionMs,
                         )
                     )
                 },

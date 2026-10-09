@@ -2,8 +2,17 @@ package com.zetronik.torrentplayer.ui.navigation
 
 import kotlinx.serialization.Serializable
 
+/** Start screen with the "Files" and "Torrents" tabs. */
 @Serializable
-data object RecentRoute
+data object HomeRoute
+
+/** The built-in file browser in pick mode: adds a file ([folders] false) or a folder to the "Files" tab. */
+@Serializable
+data class PickerRoute(val folders: Boolean)
+
+/** A local folder: [path] is its absolute path on shared storage. */
+@Serializable
+data class FolderRoute(val path: String, val title: String)
 
 /** [source] is a serialized [com.zetronik.torrentplayer.torrent.TorrentInput]. */
 @Serializable
@@ -43,6 +52,9 @@ sealed interface NavRequest {
      * the torrent was already in the session, i.e. its file list may be the current screen.
      */
     data class PlayTorrent(val source: String, val player: PlayerRoute, val torrentActive: Boolean) : NavRequest
+
+    /** Local videos a phone streams to this TV; the player replaces whatever is open. */
+    data class PlayStream(val player: PlayerRoute) : NavRequest
 
     data class PlayVideo(val uri: String, val title: String, val playlist: List<LocalVideo> = emptyList()) : NavRequest
 }

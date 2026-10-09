@@ -71,6 +71,9 @@ class PlaybackPositionRepository(db: AppDatabase) {
 
     fun observeForTorrent(infoHash: String): Flow<List<PlaybackPosition>> = dao.observeForTorrent(infoHash)
 
+    /** Positions of local files, keyed by their URIs. */
+    fun observe(keys: List<String>): Flow<List<PlaybackPosition>> = dao.observe(keys)
+
     /** Watched to the end (or barely started) means there is nothing to resume. */
     suspend fun save(key: String, positionMs: Long, durationMs: Long) {
         val finished = durationMs > 0 && durationMs - positionMs < END_THRESHOLD_MS

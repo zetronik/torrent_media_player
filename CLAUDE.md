@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Android video player for TV (primary), phones and tablets. Plays local videos ("Open with" from file managers) and streams video files straight from torrents. UI language is Russian (`res/values/strings.xml` is the default locale; future translations go to `values-xx/`). Package / applicationId: `com.zetronik.torrentplayer`.
 
-Three screens: recent torrents (max 20) → torrent file list (video files only) → player.
+Start screen with two tabs: the user's local files (added videos, playlists and folders) and recent torrents (max 20, → torrent file list, video files only). Both lead to the player.
 
 Planned features and their status are tracked in `roadmap.md` (in Russian). Update the statuses there when working on a roadmap item.
 
@@ -78,6 +78,7 @@ Single activity (`MainActivity`) with Compose for TV (`androidx.tv:tv-material`)
   - The preferred audio language is the device locale.
   - Subtitles are off unless the file marks a track default or forced.
 - `PlayerScreen` embeds `PlayerView` (SurfaceView, `useController = false`, focus blocked) and draws its own Compose controls.
+  - The `PlayerView` is recreated for every playlist item (`key(currentIndex)`). On the TCL TV's Realtek decoder, a 4K HEVC item started on the surface the previous 4K item just left failed with `ERROR_CODE_DECODING_FAILED` (`OMX_VDEC failed to initialize decoder`), and kept failing in that player. A fresh surface releases the display path too.
 - Remote handling:
   - Controls hidden: a root `onPreviewKeyEvent` handles OK/←/→/↑/↓ and media keys. Key-ups whose key-downs were consumed there are swallowed, so they don't click the newly focused button.
   - Controls shown: normal focus traversal.
@@ -86,7 +87,8 @@ Single activity (`MainActivity`) with Compose for TV (`androidx.tv:tv-material`)
 - Playlist: a torrent's `videoFiles`, or local videos opened together (VIEW clip data / `SEND_MULTIPLE`, passed in `PlayerRoute.playlistUris`). `PlayerViewModel.playItem` switches in place with the same player: stop, `engine.resetData`, then prepare the new file. Playback advances to the next item at the end.
 - Subtitles use a fixed `CaptionStyleCompat`: white with a black outline, no background box.
 - Recent list management: toolbar refresh/clear, per-item actions via long press or the remote Menu key (`OptionsDialog`). Seed/peer refresh uses `TrackerScraper`: its own UDP (BEP 15) and HTTP scrape client, independent of the single-torrent libtorrent session, one batched request per tracker. Trackers come from each magnet `tr=` plus `PublicTrackers`.
-- Playback positions are saved in Room (`PlaybackPosition`, key `<infohash>:<index>` or the content URI).
+- Playback positions are saved in Room (`PlaybackPosition`, key `<infohash>:<index>` or the file/content URI). Torrent positions live as long as the torrent is in the recent list (`RecentRepository.remove` deletes them).
+  - Opening a torrent file that has a position asks "Continue from …" / "Start over" (`TorrentScreen`). "Start over" passes `PlayerRoute.startPositionMs = 0`, which overrides the saved one. Switching files inside the player, local files and casts still resume silently.
 
 ### Play on TV (`remote/`, `ui/remote/`)
 
@@ -100,7 +102,28 @@ A phone sends the torrent it plays to the app on a TV in the same network; the T
   - `PlayerRoute.startPositionMs` carries the position across devices.
 - The open `PlayerViewModel` registers itself in `RemoteSession` as `RemotePlayback`: status (with track labels) and commands, always on the main thread. "Stop" sets `UiState.exitRequested`.
 - Phone side: the cast button shows in the player for torrents on non-TV devices. `CastDialog` handles discovery (`DeviceDiscovery`), pairing and sending. `RemoteScreen` polls the status every second. "Watch on phone" stops the TV and reopens the player at the TV's position.
-- Not done yet: sending local (non-torrent) videos. That would need the phone to serve the file.
+- Local videos are streamed by the phone itself:
+  - `PlayerViewModel.castRequest` offers the whole playlist through `LocalStreamServer` (in `AppContainer`): a random port, a random secret, plain sockets. One connection = one `StreamRead` JSON line (item, offset), answered by a `StreamHeader` line and the raw bytes from that offset. A seek is a new connection.
+  - `StreamService` (foreground, type `connectedDevice`, with a Wi-Fi lock) keeps the server alive while the phone is in the background. It stops with the server: "Stop on TV", "Watch on phone", the notification button, or the next offer.
+  - The TV builds `tpstream://<phone address>:<port>/<item>?s=<secret>` URIs (`StreamUris`; the address is the peer of the play request) and reads them through `StreamDataSource`, routed by `LocalDataSourceFactory` for all non-torrent playback. Positions of streamed items are not saved on the TV.
+  - "Watch on phone" maps the TV's `currentIndex` back to the offered sources.
+  - The TV side was verified with a PC script acting as the phone over adb tunnels: pairing, start at a position, seek, status and stop. The phone side has not run on a real phone yet.
+
+### Local files (`media/`, `ui/files/`, `ui/home/`)
+
+- `HomeScreen` is the start destination (`HomeRoute`): a segmented switch between `FilesTab` and `RecentTab`. Tabs switch on OK/tap, not on focus, because the new tab pulls focus into its list. The last tab is stored in `UiPreferences.homeTab`.
+  - There are no screen titles: each tab draws `HomeTabBar` (the switch, then its own actions on the same line; on compact phones the actions get their own line).
+- The "Files" tab lists what the user added (`LocalLibrary`, SharedPreferences JSON, newest first). Remove an entry by long press or the Menu key. Entries on an unplugged drive stay, marked unavailable.
+  - "Add file" / "Add folder" open `PickerScreen` (`PickerRoute(folders)`): the built-in browser starting at the volumes. It walks folders on one screen, so Back goes up a level; "Choose this folder" picks the current one. Picked volume roots are stored under the volume's name.
+  - An added folder opens `FolderScreen` (browse and play); a video plays alone; a playlist is resolved and played.
+- The app has its own file browser (`LocalFiles`); it never launches the system picker or a third-party file manager.
+  - It uses plain `java.io.File` listing with the media permissions (`READ_MEDIA_VIDEO` + `READ_MEDIA_AUDIO` on API 33+, `READ_EXTERNAL_STORAGE` before). No all-files access. Android then lists every folder but only media files; playlists count as audio media. Verified on the TCL TV (API 31): folders, the mp4 and an `.m3u` are listed, APKs are hidden.
+  - Volumes come from `StorageManager.storageVolumes` (`directory` on API 30+, derived from `getExternalFilesDirs` before). Hidden folders and `Android`/`LOST.DIR`/`System Volume Information` at a volume root are skipped.
+  - Video durations come from one MediaStore query per folder; files MediaStore has not scanned show no duration.
+- `FolderRoute(path, title)`: folders are absolute paths. Files play as `file://` URIs, which are also their playback-position keys.
+- `LocalKind` decides what is shown: video containers from `FileKind` and `.m3u/.m3u8/.pls`.
+- `PlaylistParser` (pure, unit-tested) parses M3U/PLS and decodes UTF-8 or CP1251. `PlaylistResolver` maps entries: URLs as is, absolute or relative paths as files, then the bare file name next to the playlist.
+- Opening a video plays it with the folder's other videos as the playlist (`folderPlayerRoute`, capped at 300 around the pick, since the route lives in saved state).
 
 ### Theme and templates (`ui/theme/`)
 

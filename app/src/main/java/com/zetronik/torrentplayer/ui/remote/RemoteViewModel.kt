@@ -22,6 +22,8 @@ import java.io.IOException
 /** The phone as a remote control: polls the TV's player state and sends commands. */
 class RemoteViewModel(savedStateHandle: SavedStateHandle, container: AppContainer) : ViewModel() {
 
+    private val streamServer = container.localStreamServer
+
     data class UiState(
         /** Null until the TV answered once. */
         val status: RemoteStatus? = null,
@@ -84,6 +86,7 @@ class RemoteViewModel(savedStateHandle: SavedStateHandle, container: AppContaine
     fun stopOnTv(onDone: () -> Unit) {
         viewModelScope.launch {
             runCatching { client.control(RemoteAction.STOP) }
+            streamServer.stop()
             onDone()
         }
     }
@@ -91,7 +94,7 @@ class RemoteViewModel(savedStateHandle: SavedStateHandle, container: AppContaine
     /** Stops the TV and hands the current file and position back to the phone's player. */
     fun continueHere(onReady: (PlayerRoute) -> Unit) {
         val status = _ui.value.status?.takeIf { it.active } ?: return
-        val infoHash = status.infoHash ?: return
+        val infoHash = status.infoHash ?: return continueStreamHere(status, onReady)
         viewModelScope.launch {
             runCatching { client.control(RemoteAction.STOP) }
             onReady(
@@ -100,6 +103,26 @@ class RemoteViewModel(savedStateHandle: SavedStateHandle, container: AppContaine
                     title = status.title,
                     infoHash = infoHash,
                     fileIndex = status.fileIndex,
+                    startPositionMs = status.positionMs,
+                    startDurationMs = status.durationMs,
+                )
+            )
+        }
+    }
+
+    /** A local video streamed from here: the TV's playlist is the offered one, so its index maps back. */
+    private fun continueStreamHere(status: RemoteStatus, onReady: (PlayerRoute) -> Unit) {
+        val sources = streamServer.sources
+        val current = sources.getOrNull(status.currentIndex) ?: return
+        viewModelScope.launch {
+            runCatching { client.control(RemoteAction.STOP) }
+            streamServer.stop()
+            onReady(
+                PlayerRoute(
+                    uri = current.uri,
+                    title = current.title,
+                    playlistUris = if (sources.size > 1) sources.map { it.uri } else emptyList(),
+                    playlistTitles = if (sources.size > 1) sources.map { it.title } else emptyList(),
                     startPositionMs = status.positionMs,
                     startDurationMs = status.durationMs,
                 )

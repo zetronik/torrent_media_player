@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -133,8 +134,8 @@ fun PlayerScreen(onExit: () -> Unit, onCast: (RemoteRoute) -> Unit) {
     }
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val isTorrent = viewModel.route.infoHash != null
-    // Sending to a TV: torrents only (the TV downloads them itself), and only from a phone or tablet.
-    val canCast = isTorrent && !LocalIsTv.current
+    // Sending to a TV, from a phone or tablet: the TV downloads a torrent itself, local videos are streamed.
+    val canCast = !LocalIsTv.current
     val compact = AppTheme.layout.isCompact
     val errorText = when {
         ui.insufficientSpaceBytes != null -> stringResource(
@@ -250,7 +251,11 @@ fun PlayerScreen(onExit: () -> Unit, onCast: (RemoteRoute) -> Unit) {
             .focusRequester(rootFocus)
             .focusable()
     ) {
-        VideoSurface(viewModel, ui.scale, subtitlesAbove = if (controlsVisible && errorText == null) seekBarTop else 0f)
+        // A fresh surface for every playlist item: Realtek TV decoders fail to start a 4K stream on a surface
+        // that the previous 4K decoder has just left (ERROR_CODE_DECODING_FAILED on the next item).
+        key(ui.currentIndex) {
+            VideoSurface(viewModel, ui.scale, subtitlesAbove = if (controlsVisible && errorText == null) seekBarTop else 0f)
+        }
 
         // Touch layer above the video view, below the controls.
         Box(

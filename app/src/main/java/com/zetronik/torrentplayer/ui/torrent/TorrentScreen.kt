@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import com.zetronik.torrentplayer.ui.common.OptionsDialog
+import com.zetronik.torrentplayer.ui.common.DialogOption
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,7 +65,8 @@ import com.zetronik.torrentplayer.ui.theme.LocalScreenPadding
 
 @Composable
 fun TorrentScreen(
-    onPlay: (TorrentMeta, TorrentFileEntry) -> Unit,
+    /** [startPositionMs] is 0 to start over, -1 for the saved position (or the start when there is none). */
+    onPlay: (TorrentMeta, TorrentFileEntry, startPositionMs: Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -97,7 +101,7 @@ fun TorrentScreen(
                 meta = current.meta,
                 stats = stats,
                 positions = positions,
-                onPlay = { onPlay(current.meta, it) },
+                onPlay = { file, startMs -> onPlay(current.meta, file, startMs) },
                 onBack = onBack,
             )
         }
@@ -159,7 +163,7 @@ private fun FileList(
     meta: TorrentMeta,
     stats: TorrentStats,
     positions: Map<Int, PlaybackPosition>,
-    onPlay: (TorrentFileEntry) -> Unit,
+    onPlay: (TorrentFileEntry, startPositionMs: Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val resources = LocalResources.current
@@ -169,6 +173,9 @@ private fun FileList(
     val listState = rememberLazyListState()
     var lastPlayed by rememberSaveable { mutableIntStateOf(-1) }
     val itemFocus = remember { HashMap<Int, FocusRequester>() }
+    // A file watched before asks whether to continue or start over.
+    var resumeFor by remember { mutableStateOf<Pair<TorrentFileEntry, PlaybackPosition>?>(null) }
+    var pendingFocus by remember { mutableStateOf<Int?>(null) }
 
     Column(
         Modifier
@@ -210,7 +217,7 @@ private fun FileList(
                     position = ItemPosition.of(index, videos.size),
                     onClick = {
                         lastPlayed = file.index
-                        onPlay(file)
+                        if (position != null) resumeFor = file to position else onPlay(file, -1)
                     },
                     modifier = Modifier.focusRequester(rememberItemFocusRequester(itemFocus, file.index)),
                     headlineContent = { Text(file.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
@@ -233,6 +240,33 @@ private fun FileList(
                 )
             }
         }
+    }
+
+    resumeFor?.let { (file, position) ->
+        OptionsDialog(
+            title = file.name,
+            options = listOf(
+                DialogOption(
+                    stringResource(R.string.torrent_resume_continue, formatDuration(position.positionMs)),
+                    icon = R.drawable.ic_play,
+                ) { onPlay(file, -1) },
+                DialogOption(stringResource(R.string.torrent_resume_restart), icon = R.drawable.ic_skip_previous) {
+                    onPlay(file, 0)
+                },
+            ),
+            onDismiss = {
+                resumeFor = null
+                pendingFocus = file.index
+            },
+        )
+    }
+
+    // Back from the dialog: focus returns to the row, not to wherever the dialog left it.
+    LaunchedEffect(pendingFocus) {
+        val index = pendingFocus ?: return@LaunchedEffect
+        withFrameNanos { }
+        if (keyboardNavigation) itemFocus[index]?.requestFocusSafely()
+        pendingFocus = null
     }
 
     LaunchedEffect(Unit) {
