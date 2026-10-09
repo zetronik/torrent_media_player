@@ -8,6 +8,8 @@ Android video player for TV (primary), phones and tablets. Plays local videos ("
 
 Three screens: recent torrents (max 20) → torrent file list (video files only) → player.
 
+Planned features and their status are tracked in `roadmap.md` (in Russian). Update the statuses there when working on a roadmap item.
+
 ## Commands
 
 Run from the repo root (`gradlew.bat` on Windows, or `./gradlew` from Git Bash).
